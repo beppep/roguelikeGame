@@ -2,6 +2,7 @@ import pygame
 import time
 import random
 import os
+
 clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
@@ -47,6 +48,11 @@ class Game():
                 targets.append(enemy)
         return targets
 
+    def findPlayer(self, x,y, r):
+        r = r+game.player.radius
+        if (game.player.x-x)**2 + (game.player.y-y)**2 < r**2:
+            return game.player
+        return 0
 
     def draw(self):
         gameDisplay.fill((100,100,100))
@@ -60,7 +66,7 @@ class Player():
     imageSize = 128
     idleImage = loadTexture("player/player.png", imageSize)
     walkImages = [loadTexture("player/walk1.png", imageSize), loadTexture("player/walk2.png", imageSize)]
-    attackImage = loadTexture("player/strike.png", imageSize)
+    attackImages = [loadTexture("player/strike1.png", imageSize), loadTexture("player/strike2.png", imageSize)]
     rollImages = [loadTexture("player/roll1.png", imageSize), loadTexture("player/roll2.png", imageSize)]
 
     def __init__(self, x, y):
@@ -98,11 +104,14 @@ class Player():
 
         # ATAKK
         if self.state == 1:
-            self.image = self.attackImage
-            if self.stateTimer == 2:
+            if self.stateTimer<20:
+                self.image = self.attackImages[0]
+            elif self.stateTimer == 20:
                 targets = game.findEnemies(self.x+self.xdir*10, self.y+self.ydir*10, 20)
                 for target in targets:
                     target.hurt()
+            else:
+                self.image = self.attackImages[1]
 
             self.stateTimer+=1
             if self.stateTimer>=40:
@@ -120,11 +129,16 @@ class Player():
             if self.stateTimer>=40:
                 self.state = 0
 
+    def hurt(self):
+        if not (self.state==2 and self.stateTimer<20):
+            global jump_out
+            jump_out = True
+
+
     def draw(self):
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
-        pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
-        pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*20, self.y+self.ydir*20), 20)
-        
+        #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
+        #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*20, self.y+self.ydir*20), 20)
 
 
 class Enemy():
@@ -149,7 +163,7 @@ class Enemy():
 
     def draw(self):
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
-        pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
+        #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
 
 class Animus(Enemy):
 
@@ -160,6 +174,14 @@ class Animus(Enemy):
     def __init__(self, x, y):
         super(Animus, self).__init__(x,y)
         self.image = self.idleImage
+
+    def update(self):
+        super(Animus, self).update()
+
+        #ATTACK
+        target = game.findPlayer(self.x, self.y, self.radius)
+        if target:
+            target.hurt()
 
     def hurt(self):
         game.enemies.remove(self)

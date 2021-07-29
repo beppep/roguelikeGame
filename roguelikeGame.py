@@ -69,15 +69,15 @@ class Game():
             enemy.update()
         self.player.update()
         if random.random()<0.002:
-            self.enemies.append(random.choice([Animus,Pufferfish])(random.random()*1000, 700))
-        if random.random()<0.001:
-            self.items.append(Fruit(random.random()*1000, 500))
+            self.enemies.append(random.choice([Animus,Pufferfish,Robot])(random.random()*1000, 700))
+        if random.random()<0.002:
+            self.items.append(random.choice([Fruit,Stick,Fan])(random.random()*1000, 500))
 
     def findEnemies(self, x,y, r): #hitdetection (idk if aoe is necessary or wathever)
         targets = []
         for enemy in self.enemies:
-            r = r+enemy.radius
-            if (enemy.x-x)**2 + (enemy.y-y)**2 < r**2:
+            d = r+enemy.radius
+            if (enemy.x-x)**2 + (enemy.y-y)**2 < d**2:
                 targets.append(enemy)
         return targets
 
@@ -118,8 +118,10 @@ class Player():
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
         self.image = self.idleImage
-        self.movementspeed = 1
+        self.movementSpeed = 1
         self.rollSpeed = 3
+        self.fanRoll = -3
+        self.swipeRange = 20
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -129,8 +131,8 @@ class Player():
             dx = pressed[pygame.K_d] - pressed[pygame.K_a]
             dy = pressed[pygame.K_s] - pressed[pygame.K_w]
             if dx or dy:
-                self.x += dx*self.movementspeed
-                self.y += dy*self.movementspeed
+                self.x += dx*self.movementSpeed
+                self.y += dy*self.movementSpeed
                 self.xdir = dx
                 self.ydir = dy
                 self.image = random.choice(self.walkImages+[self.idleImage])
@@ -151,6 +153,7 @@ class Player():
                     global jump_out
                     jump_out = True
                 else:
+                    self.image = self.idleImage
                     self.state = 0
 
         # ATAKK
@@ -158,7 +161,7 @@ class Player():
             if self.stateTimer<10:
                 self.image = self.attackImages[0]
             elif self.stateTimer == 10:
-                targets = game.findEnemies(self.x+self.xdir*10, self.y+self.ydir*10, 30)
+                targets = game.findEnemies(self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange, 30)
                 for target in targets:
                     target.hurt()
             else:
@@ -174,6 +177,11 @@ class Player():
                 self.image = random.choice(self.rollImages)
                 self.x+=self.xdir*self.rollSpeed#*self.movementSpeed
                 self.y+=self.ydir*self.rollSpeed#*self.movementSpeed
+                # fanRoll
+                targets = game.findEnemies(self.x,self.y,self.radius)
+                for target in targets:
+                    target.x+=self.xdir*self.fanRoll
+                    target.y+=self.ydir*self.fanRoll
             else:
                 self.image = self.rollImages[0]
             self.stateTimer+=1
@@ -188,10 +196,14 @@ class Player():
             self.stateTimer = 0
 
     def draw(self):
+        # SWIPE
         if self.state == 1:
             if self.stateTimer == 10:
-                blitRotate(gameDisplay, self.swipeImage, (int(self.x),int(self.y)), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
+                x = int(self.x+self.xdir*self.swipeRange)
+                y = int(self.y+self.ydir*self.swipeRange)
+                blitRotate(gameDisplay, self.swipeImage, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
 
+        # YOU
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
 
@@ -203,15 +215,15 @@ class Enemy():
         self.y = y
         self.state = 0
         self.stateTimer = 0
-        self.movementspeed = 1
+        self.movementSpeed = 1
 
     def update(self):
         if self.state == 0:
             dx = (self.x<game.player.x)*2 -1
             dy = (self.y<game.player.y)*2 -1
             if dx or dy:
-                self.x += dx*self.movementspeed
-                self.y += dy*self.movementspeed
+                self.x += dx*self.movementSpeed
+                self.y += dy*self.movementSpeed
                 #self.image = random.choice(self.walkImages+[self.idleImage])
             else:
                 pass
@@ -246,7 +258,7 @@ class Animus(Enemy):
             game.enemies.remove(self)
 class Pufferfish(Enemy):
 
-    radius = 30
+    radius = 20
     imageSize = 64
     idleImage = loadTexture("enemies/pufferfish/idle.png", imageSize)
     hurtImage = loadTexture("enemies/pufferfish/stunned.png", imageSize)
@@ -270,10 +282,11 @@ class Pufferfish(Enemy):
                     game.enemies.remove(self)
                 else:
                     self.state = 0
+                    self.image = self.idleImage
 
         #IDLE
         if self.state == 0:
-            if game.findPlayer(self.x, self.y, 30):
+            if game.findPlayer(self.x, self.y, 20):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -285,7 +298,7 @@ class Pufferfish(Enemy):
                 self.image = self.attackImages[1]
             if self.stateTimer==20:
                 self.image = self.attackImages[2]
-                target = game.findPlayer(self.x, self.y, 30)
+                target = game.findPlayer(self.x, self.y, 20)
                 if target:
                     target.hurt()
             if self.stateTimer==50:
@@ -301,6 +314,55 @@ class Pufferfish(Enemy):
         self.hp-=1
         self.state = -1
         self.stateTimer = 20
+class Robot(Enemy):
+
+    radius = 20
+    imageSize = 64
+    idleImage = loadTexture("enemies/robot/idle.png", imageSize)
+    hurtImage = loadTexture("enemies/robot/stunned.png", imageSize)
+
+    def __init__(self, x, y, hasClone=True):
+        super(Robot, self).__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 3
+        self.hasClone = hasClone
+        if hasClone:
+            self.clone = Robot(x+200,y, hasClone=False)
+            game.enemies.append(self.clone)
+
+    def update(self):
+        self.x += random.randint(-2,2)
+        self.y += random.randint(-2,2)
+
+
+        #HURT
+        if self.state == -1:
+            self.image = self.hurtImage
+
+            self.stateTimer-=1
+            if self.stateTimer<=0:
+                if self.hp<=0:
+                    game.enemies.remove(self)
+                else:
+                    self.state = 0
+                    self.image = self.idleImage
+
+        #IDLE
+        if self.state == 0:
+            if self.hasClone:
+                randomPoint = random.random()
+                if game.findPlayer(self.x+(self.clone.x-self.x)*randomPoint, self.y+(self.clone.y-self.y)*randomPoint, 10):
+                    game.player.hurt()
+
+    def hurt(self):
+        self.hp-=1
+        self.state = -1
+        self.stateTimer = 20
+
+    def draw(self):
+        if self.hasClone and self.state == 0 and self.clone.state == 0:
+            pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (self.x+10,self.y), (self.clone.x+10, self.clone.y), random.randint(1,8))
+        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
 
 class Item():
 
@@ -324,7 +386,22 @@ class Fruit(Item):
     image = loadTexture("items/fruit.png", imageSize)
 
     def pickup(self):
-        game.player.movementspeed+=0.5
+        game.player.movementSpeed+=0.5
+class Stick(Item):
+
+    imageSize = 128
+    image = loadTexture("items/stick.png", imageSize)
+
+    def pickup(self):
+        game.player.swipeRange+=10
+class Fan(Item):
+
+    imageSize = 128
+    image = loadTexture("items/fan.png", imageSize)
+
+    def pickup(self):
+        game.player.fanRoll+=3
+
 
 gameDisplay = pygame.display.set_mode((1600, 900),)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")

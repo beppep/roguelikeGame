@@ -69,7 +69,7 @@ class Game():
             enemy.update()
         self.player.update()
         if random.random()<0.002:
-            self.enemies.append(Animus(random.random()*1000, 700))
+            self.enemies.append(random.choice([Animus,Pufferfish])(random.random()*1000, 700))
         if random.random()<0.001:
             self.items.append(Fruit(random.random()*1000, 500))
 
@@ -226,23 +226,23 @@ class Animus(Enemy):
 
     def hurt(self):
         game.enemies.remove(self)
-class Animus(Enemy):
+class Pufferfish(Enemy):
 
     radius = 30
     imageSize = 64
     idleImage = loadTexture("enemies/pufferfish/idle.png", imageSize)
-    attackImages = [loadTexture("enemies/pufferfish/idle"+str(i)+".png", imageSize) for i in (1,2,3)]
+    attackImages = [loadTexture("enemies/pufferfish/attack"+str(i)+".png", Pufferfish.imageSize) for i in (1,2,3)]
 
     def __init__(self, x, y):
-        super(Animus, self).__init__(x,y)
+        super(Pufferfish, self).__init__(x,y)
         self.image = self.idleImage
 
     def update(self):
-        super(Animus, self).update()
+        super(Pufferfish, self).update()
 
         #IDLE
         if self.state == 0:
-            if findPlayer(self.x, self.y, 60):
+            if game.findPlayer(self.x, self.y, 30):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -254,16 +254,16 @@ class Animus(Enemy):
                 self.image = self.attackImages[1]
             if self.stateTimer==20:
                 self.image = self.attackImages[2]
-                target = game.findPlayer(self.x, self.y, 60)
+                target = game.findPlayer(self.x, self.y, 30)
                 if target:
                     target.hurt()
-            if self.stateTimer==40:
-                self.image = self.attackImages[1]
             if self.stateTimer==50:
+                self.image = self.attackImages[1]
+            if self.stateTimer==70:
                 self.image = self.attackImages[0]
 
             self.stateTimer+=1
-            if self.stateTimer>=60:
+            if self.stateTimer>=90:
                 self.state = 0
 
     def hurt(self):

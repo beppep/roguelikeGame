@@ -120,7 +120,7 @@ class Player():
         self.image = self.idleImage
         self.movementSpeed = 1
         self.rollSpeed = 3
-        self.fanRoll = -3
+        self.fanRoll = 0 #3?
         self.swipeRange = 20
 
     def update(self):
@@ -334,6 +334,9 @@ class Robot(Enemy):
         self.x += random.randint(-2,2)
         self.y += random.randint(-2,2)
 
+        if self.hasClone:
+            if self.clone.hp <= 0:
+                self.hasClone = 0
 
         #HURT
         if self.state == -1:
@@ -400,7 +403,7 @@ class Fan(Item):
     image = loadTexture("items/fan.png", imageSize)
 
     def pickup(self):
-        game.player.fanRoll+=3
+        game.player.fanRoll-=3
 
 
 gameDisplay = pygame.display.set_mode((1600, 900),)# pygame.FULLSCREEN)

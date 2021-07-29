@@ -2,6 +2,7 @@ import pygame
 import time
 import random
 import os
+import math
 
 clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
@@ -19,6 +20,31 @@ def initSound():
     #pygame.mixer.music.set_volume(volume*0.1)
     #pygame.mixer.music.play(-1)
 
+def blitRotate(surf,image, pos, originPos, angle):
+
+    #ifx rad ddeg
+    angle = -angle*180/math.pi
+
+    # calcaulate the axis aligned bounding box of the rotated image
+    w, h       = image.get_size()
+    box        = [pygame.math.Vector2(p) for p in [(0, 0), (w, 0), (w, -h), (0, -h)]]
+    box_rotate = [p.rotate(angle) for p in box]
+    min_box    = (min(box_rotate, key=lambda p: p[0])[0], min(box_rotate, key=lambda p: p[1])[1])
+    max_box    = (max(box_rotate, key=lambda p: p[0])[0], max(box_rotate, key=lambda p: p[1])[1])
+
+    # calculate the translation of the pivot 
+    pivot        = pygame.math.Vector2(originPos[0], -originPos[1])
+    pivot_rotate = pivot.rotate(angle)
+    pivot_move   = pivot_rotate - pivot
+
+    # calculate the upper left origin of the rotated image
+    origin = (int(pos[0] - originPos[0] + min_box[0] - pivot_move[0]), int(pos[1] - originPos[1] - max_box[1] + pivot_move[1]))
+
+    # get a rotated image
+    rotated_image = pygame.transform.rotate(image, angle+180)
+    surf.blit(rotated_image, origin)
+
+
 def loadTexture(name, w,h=None, mirror=False):
     if not h:
         h=w
@@ -33,12 +59,19 @@ class Game():
 
     def __init__(self):
         self.player = Player(100,100)
-        self.enemies = [Animus(500,200)]
+        self.enemies = []#Animus(500,200)]
+        self.items = []
 
     def update(self):
+        for item in self.items:
+            item.update()
         for enemy in self.enemies:
             enemy.update()
         self.player.update()
+        if random.random()<0.002:
+            self.enemies.append(Animus(random.random()*1000, 700))
+        if random.random()<0.001:
+            self.items.append(Fruit(random.random()*1000, 500))
 
     def findEnemies(self, x,y, r): #hitdetection (idk if aoe is necessary or wathever)
         targets = []
@@ -49,13 +82,15 @@ class Game():
         return targets
 
     def findPlayer(self, x,y, r):
-        r = r+game.player.radius
-        if (game.player.x-x)**2 + (game.player.y-y)**2 < r**2:
-            return game.player
+        r = r+self.player.radius
+        if (self.player.x-x)**2 + (self.player.y-y)**2 < r**2:
+            return self.player
         return 0
 
     def draw(self):
         gameDisplay.fill((100,100,100))
+        for item in self.items:
+            item.draw()
         for enemy in self.enemies:
             enemy.draw()
         self.player.draw()
@@ -69,6 +104,8 @@ class Player():
     attackImages = [loadTexture("player/strike1.png", imageSize), loadTexture("player/strike2.png", imageSize)]
     rollImages = [loadTexture("player/roll1.png", imageSize), loadTexture("player/roll2.png", imageSize)]
 
+    swipeImage = loadTexture("player/swipe.png", imageSize)
+
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -78,7 +115,7 @@ class Player():
         self.stateTimer = 0
         self.image = self.idleImage
         self.movementspeed = 1
-
+        self.rollSpeed = 3
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -104,27 +141,27 @@ class Player():
 
         # ATAKK
         if self.state == 1:
-            if self.stateTimer<20:
+            if self.stateTimer<10:
                 self.image = self.attackImages[0]
-            elif self.stateTimer == 20:
-                targets = game.findEnemies(self.x+self.xdir*10, self.y+self.ydir*10, 20)
+            elif self.stateTimer == 10:
+                targets = game.findEnemies(self.x+self.xdir*10, self.y+self.ydir*10, 30)
                 for target in targets:
                     target.hurt()
             else:
                 self.image = self.attackImages[1]
 
             self.stateTimer+=1
-            if self.stateTimer>=40:
+            if self.stateTimer>=30:
                 self.state = 0
 
         # ROLL
         if self.state == 2:
             if self.stateTimer<20:
                 self.image = random.choice(self.rollImages)
-                self.x+=self.xdir*self.movementspeed*2
-                self.y+=self.ydir*self.movementspeed*2
+                self.x+=self.xdir*self.rollSpeed#*self.movementSpeed
+                self.y+=self.ydir*self.rollSpeed#*self.movementSpeed
             else:
-                self.image = self.rollImages[1]
+                self.image = self.rollImages[0]
             self.stateTimer+=1
             if self.stateTimer>=40:
                 self.state = 0
@@ -136,9 +173,12 @@ class Player():
 
 
     def draw(self):
+        if self.state == 1:
+            if self.stateTimer == 10:
+                blitRotate(gameDisplay, self.swipeImage, (int(self.x),int(self.y)), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
+
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
-        #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*20, self.y+self.ydir*20), 20)
 
 
 class Enemy():
@@ -147,6 +187,7 @@ class Enemy():
         self.x = x
         self.y = y
         self.state = 0
+        self.stateTimer = 0
         self.movementspeed = 1
 
     def update(self):
@@ -179,12 +220,79 @@ class Animus(Enemy):
         super(Animus, self).update()
 
         #ATTACK
-        target = game.findPlayer(self.x, self.y, self.radius)
+        target = game.findPlayer(self.x, self.y, 20)
         if target:
             target.hurt()
 
     def hurt(self):
         game.enemies.remove(self)
+class Animus(Enemy):
+
+    radius = 30
+    imageSize = 64
+    idleImage = loadTexture("enemies/pufferfish/idle.png", imageSize)
+    attackImages = [loadTexture("enemies/pufferfish/idle"+str(i)+".png", imageSize) for i in (1,2,3)]
+
+    def __init__(self, x, y):
+        super(Animus, self).__init__(x,y)
+        self.image = self.idleImage
+
+    def update(self):
+        super(Animus, self).update()
+
+        #IDLE
+        if self.state == 0:
+            if findPlayer(self.x, self.y, 60):
+                self.state = 1
+                self.stateTimer = 0
+
+        #ATTACK
+        if self.state == 1:
+            if self.stateTimer==0:
+                self.image = self.attackImages[0]
+            if self.stateTimer==10:
+                self.image = self.attackImages[1]
+            if self.stateTimer==20:
+                self.image = self.attackImages[2]
+                target = game.findPlayer(self.x, self.y, 60)
+                if target:
+                    target.hurt()
+            if self.stateTimer==40:
+                self.image = self.attackImages[1]
+            if self.stateTimer==50:
+                self.image = self.attackImages[0]
+
+            self.stateTimer+=1
+            if self.stateTimer>=60:
+                self.state = 0
+
+    def hurt(self):
+        game.enemies.remove(self)
+
+
+class Item():
+
+    radius = 20
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def update(self):
+        if game.findPlayer(self.x,self.y, self.radius):
+            self.pickup()
+            game.items.remove(self)
+
+    def draw(self):
+        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+
+class Fruit(Item):
+
+    imageSize = 128
+    image = loadTexture("items/fruit.png", imageSize)
+
+    def pickup(self):
+        game.player.rollSpeed+=2
 
 gameDisplay = pygame.display.set_mode((1600, 900),)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")

@@ -89,6 +89,8 @@ class Game():
 
     def draw(self):
         gameDisplay.fill((100,100,100))
+        for i in range(self.player.hp):
+            pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
         for item in self.items:
             item.draw()
         for enemy in self.enemies:
@@ -100,6 +102,7 @@ class Player():
     radius = 20
     imageSize = 128
     idleImage = loadTexture("player/player.png", imageSize)
+    hurtImage = loadTexture("player/hurt.png", imageSize)
     walkImages = [loadTexture("player/walk1.png", imageSize), loadTexture("player/walk2.png", imageSize)]
     attackImages = [loadTexture("player/strike1.png", imageSize), loadTexture("player/strike2.png", imageSize)]
     rollImages = [loadTexture("player/roll1.png", imageSize), loadTexture("player/roll2.png", imageSize)]
@@ -111,6 +114,7 @@ class Player():
         self.y = y
         self.xdir = 0 #senaste man tittade
         self.ydir = 0
+        self.hp = 3
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
         self.image = self.idleImage
@@ -138,6 +142,16 @@ class Player():
             if pressed[pygame.K_LSHIFT]:
                 self.state = 2
                 self.stateTimer = 0
+
+        # HURT
+        if self.state == -1:
+            self.stateTimer+=1
+            if self.stateTimer>=10:
+                if self.hp <= 0:
+                    global jump_out
+                    jump_out = True
+                else:
+                    self.state = 0
 
         # ATAKK
         if self.state == 1:
@@ -168,9 +182,10 @@ class Player():
 
     def hurt(self):
         if not (self.state==2 and self.stateTimer<20):
-            global jump_out
-            jump_out = True
-
+            self.image = self.hurtImage
+            self.hp-=1
+            self.state = -1
+            self.stateTimer = 0
 
     def draw(self):
         if self.state == 1:
@@ -215,6 +230,7 @@ class Animus(Enemy):
     def __init__(self, x, y):
         super(Animus, self).__init__(x,y)
         self.image = self.idleImage
+        self.hp = 1
 
     def update(self):
         super(Animus, self).update()
@@ -225,20 +241,35 @@ class Animus(Enemy):
             target.hurt()
 
     def hurt(self):
-        game.enemies.remove(self)
+        self.hp-=1
+        if self.hp<=0:
+            game.enemies.remove(self)
 class Pufferfish(Enemy):
 
     radius = 30
     imageSize = 64
     idleImage = loadTexture("enemies/pufferfish/idle.png", imageSize)
-    attackImages = [loadTexture("enemies/pufferfish/attack"+str(i)+".png", Pufferfish.imageSize) for i in (1,2,3)]
+    hurtImage = loadTexture("enemies/pufferfish/stunned.png", imageSize)
+    attackImages = [loadTexture("enemies/pufferfish/attack"+str(i)+".png", Animus.imageSize) for i in (1,2,3)]
 
     def __init__(self, x, y):
         super(Pufferfish, self).__init__(x,y)
         self.image = self.idleImage
+        self.hp = 2
 
     def update(self):
         super(Pufferfish, self).update()
+
+        #HURT
+        if self.state == -1:
+            self.image = self.hurtImage
+
+            self.stateTimer-=1 #här går den neråt
+            if self.stateTimer<=0:
+                if self.hp<=0:
+                    game.enemies.remove(self)
+                else:
+                    self.state = 0
 
         #IDLE
         if self.state == 0:
@@ -267,8 +298,9 @@ class Pufferfish(Enemy):
                 self.state = 0
 
     def hurt(self):
-        game.enemies.remove(self)
-
+        self.hp-=1
+        self.state = -1
+        self.stateTimer = 20
 
 class Item():
 
@@ -292,7 +324,7 @@ class Fruit(Item):
     image = loadTexture("items/fruit.png", imageSize)
 
     def pickup(self):
-        game.player.rollSpeed+=2
+        game.player.movementspeed+=0.5
 
 gameDisplay = pygame.display.set_mode((1600, 900),)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")

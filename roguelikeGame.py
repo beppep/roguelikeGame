@@ -44,7 +44,6 @@ def blitRotate(surf,image, pos, originPos, angle):
     rotated_image = pygame.transform.rotate(image, angle+180)
     surf.blit(rotated_image, origin)
 
-
 def loadTexture(name, w,h=None, mirror=False):
     if not h:
         h=w
@@ -68,10 +67,10 @@ class Game():
         for enemy in self.enemies:
             enemy.update()
         self.player.update()
-        if random.random()<0.002:
+        if random.random()<0.005:
             self.enemies.append(random.choice([Animus,Pufferfish,Robot])(random.random()*1000, 700))
         if random.random()<0.002:
-            self.items.append(random.choice([Fruit,Stick,Fan])(random.random()*1000, 500))
+            self.items.append(random.choice([Fruit,Stick,Fan,Heart])(random.random()*1000, 500))
 
     def findEnemies(self, x,y, r): #hitdetection (idk if aoe is necessary or wathever)
         targets = []
@@ -82,6 +81,8 @@ class Game():
         return targets
 
     def findPlayer(self, x,y, r):
+        if (self.player.state==2 and self.player.stateTimer<20):
+            return 0
         r = r+self.player.radius
         if (self.player.x-x)**2 + (self.player.y-y)**2 < r**2:
             return self.player
@@ -119,7 +120,7 @@ class Player():
         self.stateTimer = 0
         self.image = self.idleImage
         self.movementSpeed = 1
-        self.rollSpeed = 3
+        self.rollSpeed = 4
         self.fanRoll = 0 #3?
         self.swipeRange = 20
 
@@ -189,13 +190,16 @@ class Player():
                 self.state = 0
 
     def hurt(self):
-        if not (self.state==2 and self.stateTimer<20):
-            self.image = self.hurtImage
-            self.hp-=1
-            self.state = -1
-            self.stateTimer = 0
+        self.image = self.hurtImage
+        self.hp-=1
+        self.state = -1
+        self.stateTimer = 0
 
     def draw(self):
+
+        #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
+        #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange), 30)
+
         # SWIPE
         if self.state == 1:
             if self.stateTimer == 10:
@@ -204,8 +208,7 @@ class Player():
                 blitRotate(gameDisplay, self.swipeImage, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
 
         # YOU
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
-        #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
+        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y-8) - self.imageSize//2))
 
 
 class Enemy():
@@ -251,6 +254,7 @@ class Animus(Enemy):
         target = game.findPlayer(self.x, self.y, 20)
         if target:
             target.hurt()
+            game.enemies.remove(self)
 
     def hurt(self):
         self.hp-=1
@@ -308,6 +312,7 @@ class Pufferfish(Enemy):
 
             self.stateTimer+=1
             if self.stateTimer>=90:
+                self.image = self.idleImage
                 self.state = 0
 
     def hurt(self):
@@ -318,12 +323,12 @@ class Robot(Enemy):
 
     radius = 20
     imageSize = 64
-    idleImage = loadTexture("enemies/robot/idle.png", imageSize)
+    idleImages = [loadTexture("enemies/robot/idle.png", imageSize), loadTexture("enemies/robot/idleb.png", imageSize)]
     hurtImage = loadTexture("enemies/robot/stunned.png", imageSize)
 
     def __init__(self, x, y, hasClone=True):
         super(Robot, self).__init__(x,y)
-        self.image = self.idleImage
+        self.image = self.idleImages[0]
         self.hp = 3
         self.hasClone = hasClone
         if hasClone:
@@ -348,13 +353,13 @@ class Robot(Enemy):
                     game.enemies.remove(self)
                 else:
                     self.state = 0
-                    self.image = self.idleImage
 
         #IDLE
         if self.state == 0:
+            self.image = random.choice(self.idleImages)
             if self.hasClone:
                 randomPoint = random.random()
-                if game.findPlayer(self.x+(self.clone.x-self.x)*randomPoint, self.y+(self.clone.y-self.y)*randomPoint, 10):
+                if game.findPlayer(self.x+(self.clone.x-self.x)*randomPoint, self.y+(self.clone.y-self.y)*randomPoint, 4):
                     game.player.hurt()
 
     def hurt(self):
@@ -389,14 +394,14 @@ class Fruit(Item):
     image = loadTexture("items/fruit.png", imageSize)
 
     def pickup(self):
-        game.player.movementSpeed+=0.5
+        game.player.movementSpeed+=1
 class Stick(Item):
 
     imageSize = 128
     image = loadTexture("items/stick.png", imageSize)
 
     def pickup(self):
-        game.player.swipeRange+=10
+        game.player.swipeRange+=16
 class Fan(Item):
 
     imageSize = 128
@@ -404,11 +409,17 @@ class Fan(Item):
 
     def pickup(self):
         game.player.fanRoll-=3
+class Heart(Item):
 
+    imageSize = 128
+    image = loadTexture("items/heart.png", imageSize)
+
+    def pickup(self):
+        game.player.hp+=1
 
 gameDisplay = pygame.display.set_mode((1600, 900),)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")
-#pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "puncher", "idle.png")))
+pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player", "player.png")))
 
 initSound()
 

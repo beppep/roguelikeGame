@@ -72,7 +72,7 @@ def createF(names,x,y,occurance=1):
 
 class Floor():
     def __init__(self,presets):
-        self.rooms=[Room(random.choice(presets),[0,0])]
+        self.rooms=[Room([[],[]],[0,0])]
         self.roomPosList=[[0,0]]
         for i in range(random.randint(5,9)):
             roomPos=[0,0]
@@ -90,13 +90,13 @@ class Floor():
     def drawMinimap(self):
         for room in self.rooms:
             pos=room.floorPos
-            pygame.draw.rect(gameDisplay, (200,200,200),[1100+pos[0]*20,100+pos[1]*20,10,10],0)
+            pygame.draw.rect(gameDisplay, (200,200,200),[display[0]-100+pos[0]*20,100+pos[1]*20,10,10],0)
             for link in room.links:
                 if link:
                     pos2=link.floorPos
-                    pygame.draw.line(gameDisplay,(200,200,200),[1100+pos[0]*20+5,100+pos[1]*20+5],[1100+pos2[0]*20+5,100+pos2[1]*20+5],3)
+                    pygame.draw.line(gameDisplay,(200,200,200),[display[0]-100+pos[0]*20+5,100+pos[1]*20+5],[display[0]-100+pos2[0]*20+5,100+pos2[1]*20+5],3)
             pos=game.room.floorPos
-            pygame.draw.circle(gameDisplay, (200,0,0),[1100+pos[0]*20+5,100+pos[1]*20+5],3)
+            pygame.draw.circle(gameDisplay, (200,0,0),[display[0]-100+pos[0]*20+5,100+pos[1]*20+5],3)
 
 class Room():
     def __init__(self,preset,floorPos):
@@ -137,7 +137,7 @@ class Room():
 class Game():
 
     def __init__(self):
-        self.player = Player(100,100)
+        self.player = Player(display[0]//2,display[1]//2)
         self.room = None
         self.floor = None
 
@@ -159,6 +159,8 @@ class Game():
         return targets
 
     def findPlayer(self, x,y, r):
+        if self.player.state==2 and self.player.stateTimer<20:
+            return 0
         r = r+self.player.radius
         if (self.player.x-x)**2 + (self.player.y-y)**2 < r**2:
             return self.player
@@ -443,7 +445,7 @@ class Robot(Enemy):
         self.hasClone = hasClone
         self.alone = False
         if hasClone:
-            self.clone = Robot(x+200,y, hasClone=False)
+            self.clone = Robot(random.randint(100,display[0]-100),random.randint(100,display[1]-100), hasClone=False)
             game.room.enemies.append(self.clone)
 
     def update(self):
@@ -517,7 +519,7 @@ class Projectile():
 
 class Missile(Projectile):
 
-    radius = 10
+    radius = 4
     imageSize = 64
     image = loadTexture("enemies/robot/proj.png", imageSize)
 
@@ -617,11 +619,52 @@ roomPresets=[
     ],], # Test Room
     
     [[
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
     ],[
     createF(allItems,600,500),
-    
     ],], # Test Room
+
+    [[
+    createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
+    createF([Animus],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
+    createF([Pufferfish],600,350),
+    ],[
+    createF([Fruit],550,350, occurance=0.3),
+    createF([Stick],600,350, occurance=0.4),
+    createF([Fan],650,350, occurance=0.3),
+    ],], # Ellas Room
+
+    [[
+    createF([Animus,Pufferfish],500,300),
+    createF([Animus,Pufferfish],700,300),
+    createF([Animus,Pufferfish],600,250),
+    createF([Animus,Pufferfish],550,450),
+    createF([Animus,Pufferfish],650,450),
+    ],[
+    createF([Icecrystal,Icecrystal,Heart],600,350),
+    ],], # Ice Crystal
+
+    [[
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    ],[
+    createF(allItems,600,350),
+    ],], # Laser Room
+
+    [[
+    ],[
+    createF(Heart,600,350),
+    ],], # Heal
+
+    [[
+    createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
+    createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
+    createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.8),
+    ],[
+    ],], # Animals
 ]
 
 

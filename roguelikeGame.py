@@ -7,7 +7,7 @@ import math
 clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
-
+display = (1200,700)
 def initSound():
     volume = 1
     pygame.font.init() # you have to call this at the start, 
@@ -55,27 +55,103 @@ def loadTexture(name, w,h=None, mirror=False):
     else:
         return image
 
-class Game():
+def createF(names,x,y,occurance=1):
+    def create():
+        if(random.random()<occurance):
+            if(callable(x)):
+                posX=x()
+            else:
+                posX=x
+            if(callable(y)):
+                posY=y()
+            else:
+                posY=y
+            return random.choice(names)(posX,posY)
+        return None
+    return create
 
-    def __init__(self):
-        self.player = Player(100,100)
-        self.enemies = []#Animus(500,200)]
+class Floor():
+    def __init__(self,presets):
+        self.rooms=[Room(random.choice(presets),[0,0])]
+        self.roomPosList=[[0,0]]
+        for i in range(random.randint(5,9)):
+            roomPos=[0,0]
+            while roomPos in self.roomPosList:
+                connectedRoom = random.choice(self.rooms)
+                while not None in connectedRoom.links:
+                    connectedRoom = random.choice(self.rooms)
+                connectionDirection = random.choice([i for i in range(4) if connectedRoom.links[i]==None ])
+                roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers
+            self.roomPosList.append(roomPos)
+            room = Room(random.choice(presets),roomPos)
+            self.rooms.append(room)
+            connectedRoom.links[connectionDirection]=room
+            room.links[(connectionDirection+2)%4]=connectedRoom
+    def drawMinimap(self):
+        for room in self.rooms:
+            pos=room.floorPos
+            pygame.draw.rect(gameDisplay, (200,200,200),[1100+pos[0]*20,100+pos[1]*20,10,10],0)
+            for link in room.links:
+                if link:
+                    pos2=link.floorPos
+                    pygame.draw.line(gameDisplay,(200,200,200),[1100+pos[0]*20+5,100+pos[1]*20+5],[1100+pos2[0]*20+5,100+pos2[1]*20+5],3)
+            pos=game.room.floorPos
+            pygame.draw.circle(gameDisplay, (200,0,0),[1100+pos[0]*20+5,100+pos[1]*20+5],3)
+
+
+directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
+
+
+
+class Room():
+    def __init__(self,preset,floorPos):
+        self.enemies = []
         self.items = []
-
+        self.preset=preset
+        self.links=[None,None,None,None] # Up, Right, Down, Left
+        self.alreadyLoaded=False
+        self.floorPos=floorPos
+        
+    def loadRoom(self):
+        if(not self.alreadyLoaded):
+            for f in self.preset[0]:
+                enemy = f()
+                if(enemy):
+                    self.enemies.append(enemy)
+            for f in self.preset[1]:
+                item = f()
+                if(item):
+                    self.items.append(item)
+            self.alreadyLoaded=True
     def update(self):
         for item in self.items:
             item.update()
         for enemy in self.enemies:
             enemy.update()
+    def draw(self):
+        for item in self.items:
+            item.draw()
+        for enemy in self.enemies:
+            enemy.draw()
+class Game():
+
+    def __init__(self):
+        self.player = Player(100,100)
+        self.room = None
+        self.floor = None
+
+    def update(self):
+        self.room.update()
         self.player.update()
-        if random.random()<0.002:
-            self.enemies.append(random.choice([Animus,Pufferfish,Robot])(random.random()*1000, 700))
-        if random.random()<0.002:
-            self.items.append(random.choice([Fruit,Stick,Fan])(random.random()*1000, 500))
+
+    def enterFloor(self,floor):
+        game.floor=floor
+        game.room=random.choice(floor.rooms)
+        game.room.loadRoom()
 
     def findEnemies(self, x,y, r): #hitdetection (idk if aoe is necessary or wathever)
         targets = []
-        for enemy in self.enemies:
+        for enemy in self.room.enemies:
             d = r+enemy.radius
             if (enemy.x-x)**2 + (enemy.y-y)**2 < d**2:
                 targets.append(enemy)
@@ -91,11 +167,9 @@ class Game():
         gameDisplay.fill((100,100,100))
         for i in range(self.player.hp):
             pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
-        for item in self.items:
-            item.draw()
-        for enemy in self.enemies:
-            enemy.draw()
+        self.room.draw()
         self.player.draw()
+        self.floor.drawMinimap()
 
 class Player():
 
@@ -136,6 +210,7 @@ class Player():
                 self.xdir = dx
                 self.ydir = dy
                 self.image = random.choice(self.walkImages+[self.idleImage])
+
             else:
                 self.image = self.idleImage
             if pressed[pygame.K_SPACE]:
@@ -177,7 +252,7 @@ class Player():
                 self.image = random.choice(self.rollImages)
                 self.x+=self.xdir*self.rollSpeed#*self.movementSpeed
                 self.y+=self.ydir*self.rollSpeed#*self.movementSpeed
-                # fanRoll
+                # Roll
                 targets = game.findEnemies(self.x,self.y,self.radius)
                 for target in targets:
                     target.x+=self.xdir*self.fanRoll
@@ -187,6 +262,35 @@ class Player():
             self.stateTimer+=1
             if self.stateTimer>=40:
                 self.state = 0
+
+        if(self.x>display[0]):
+            if(game.room.links[1]):
+                game.room=game.room.links[1]
+                game.room.loadRoom()
+                self.x=10
+            else:
+                self.x=display[0]
+        elif(self.x<0):
+            if(game.room.links[3]):
+                game.room=game.room.links[3]
+                game.room.loadRoom()
+                self.x=display[0]-10
+            else:
+                self.x=0
+        elif(self.y>display[1]):
+            if(game.room.links[2]):
+                game.room=game.room.links[2]
+                game.room.loadRoom()
+                self.y=10
+            else:
+                self.y=display[1]
+        elif(self.y<0):
+            if(game.room.links[0]):
+                game.room=game.room.links[0]
+                game.room.loadRoom()
+                self.y=display[1]-10
+            else:
+                self.y=0
 
     def hurt(self):
         if not (self.state==2 and self.stateTimer<20):
@@ -255,7 +359,7 @@ class Animus(Enemy):
     def hurt(self):
         self.hp-=1
         if self.hp<=0:
-            game.enemies.remove(self)
+            game.room.enemies.remove(self)
 class Pufferfish(Enemy):
 
     radius = 20
@@ -279,7 +383,7 @@ class Pufferfish(Enemy):
             self.stateTimer-=1 #här går den neråt
             if self.stateTimer<=0:
                 if self.hp<=0:
-                    game.enemies.remove(self)
+                    game.room.enemies.remove(self)
                 else:
                     self.state = 0
                     self.image = self.idleImage
@@ -328,7 +432,7 @@ class Robot(Enemy):
         self.hasClone = hasClone
         if hasClone:
             self.clone = Robot(x+200,y, hasClone=False)
-            game.enemies.append(self.clone)
+            game.room.enemies.append(self.clone)
 
     def update(self):
         self.x += random.randint(-2,2)
@@ -345,7 +449,7 @@ class Robot(Enemy):
             self.stateTimer-=1
             if self.stateTimer<=0:
                 if self.hp<=0:
-                    game.enemies.remove(self)
+                    game.room.enemies.remove(self)
                 else:
                     self.state = 0
                     self.image = self.idleImage
@@ -378,7 +482,7 @@ class Item():
     def update(self):
         if game.findPlayer(self.x,self.y, self.radius):
             self.pickup()
-            game.items.remove(self)
+            game.room.items.remove(self)
 
     def draw(self):
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
@@ -405,14 +509,42 @@ class Fan(Item):
     def pickup(self):
         game.player.fanRoll-=3
 
+allItems=[Fruit,Stick,Fan]
+roomPresets=[
+    # [[
+    # createF([Animus],10,10),
+    # createF([Animus,Pufferfish,Robot],150,50),
+    # createF([Robot],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
+    # ],[
+    # createF([Fruit],10,150),
+    # createF(allItems,10,150),
+    # createF([Fruit],200,400,occurance=0.5),
+    # ],], # Test Room using everything
+    [[
+    createF([Animus],600,350),
+    createF([Pufferfish],400,350,occurance=0.2),
+    createF([Pufferfish],800,350,occurance=0.2),
+    ],[
+    createF([Fruit],600,500,occurance=0.5),
+    ],], # Test Room
+    
+    [[
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
+    ],[
+    createF(allItems,600,500),
+    
+    ],], # Test Room
+]
 
-gameDisplay = pygame.display.set_mode((1600, 900),)# pygame.FULLSCREEN)
+gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")
 #pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "puncher", "idle.png")))
 
 initSound()
 
 game = Game()
+game.enterFloor(Floor(roomPresets))
+print(game.floor.roomPosList)
 
 jump_out = False
 while jump_out == False:

@@ -8,6 +8,7 @@ clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
 display = (1200,700)
+
 def initSound():
     volume = 1
     pygame.font.init() # you have to call this at the start, 
@@ -43,7 +44,6 @@ def blitRotate(surf,image, pos, originPos, angle):
     # get a rotated image
     rotated_image = pygame.transform.rotate(image, angle+180)
     surf.blit(rotated_image, origin)
-
 
 def loadTexture(name, w,h=None, mirror=False):
     if not h:
@@ -98,15 +98,11 @@ class Floor():
             pos=game.room.floorPos
             pygame.draw.circle(gameDisplay, (200,0,0),[1100+pos[0]*20+5,100+pos[1]*20+5],3)
 
-
-directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-
-
-
 class Room():
     def __init__(self,preset,floorPos):
         self.enemies = []
         self.items = []
+        self.projectiles = []
         self.preset=preset
         self.links=[None,None,None,None] # Up, Right, Down, Left
         self.alreadyLoaded=False
@@ -126,11 +122,16 @@ class Room():
     def update(self):
         for item in self.items:
             item.update()
+        for proj in self.projectiles:
+            proj.update()
         for enemy in self.enemies:
             enemy.update()
     def draw(self):
+
         for item in self.items:
             item.draw()
+        for proj in self.projectiles:
+            proj.draw()
         for enemy in self.enemies:
             enemy.draw()
 class Game():
@@ -192,10 +193,12 @@ class Player():
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
         self.image = self.idleImage
+
         self.movementSpeed = 1
-        self.rollSpeed = 3
+        self.rollSpeed = 4
         self.fanRoll = 0 #3?
         self.swipeRange = 20
+        self.icecrystal = 0
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -210,7 +213,6 @@ class Player():
                 self.xdir = dx
                 self.ydir = dy
                 self.image = random.choice(self.walkImages+[self.idleImage])
-
             else:
                 self.image = self.idleImage
             if pressed[pygame.K_SPACE]:
@@ -236,9 +238,13 @@ class Player():
             if self.stateTimer<10:
                 self.image = self.attackImages[0]
             elif self.stateTimer == 10:
-                targets = game.findEnemies(self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange, 30)
+                attackX = self.x+self.xdir*self.swipeRange
+                attackY = self.y+self.ydir*self.swipeRange
+                targets = game.findEnemies(attackX, attackY, 30)
                 for target in targets:
                     target.hurt()
+                for i in range(self.icecrystal):
+                    game.room.projectiles.append(Sapphire(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
             else:
                 self.image = self.attackImages[1]
 
@@ -252,7 +258,7 @@ class Player():
                 self.image = random.choice(self.rollImages)
                 self.x+=self.xdir*self.rollSpeed#*self.movementSpeed
                 self.y+=self.ydir*self.rollSpeed#*self.movementSpeed
-                # Roll
+                # fanRoll
                 targets = game.findEnemies(self.x,self.y,self.radius)
                 for target in targets:
                     target.x+=self.xdir*self.fanRoll
@@ -293,13 +299,16 @@ class Player():
                 self.y=0
 
     def hurt(self):
-        if not (self.state==2 and self.stateTimer<20):
-            self.image = self.hurtImage
-            self.hp-=1
-            self.state = -1
-            self.stateTimer = 0
+        self.image = self.hurtImage
+        self.hp-=1
+        self.state = -1
+        self.stateTimer = 0
 
     def draw(self):
+
+        #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
+        #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange), 30)
+
         # SWIPE
         if self.state == 1:
             if self.stateTimer == 10:
@@ -308,8 +317,7 @@ class Player():
                 blitRotate(gameDisplay, self.swipeImage, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
 
         # YOU
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
-        #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
+        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y-8) - self.imageSize//2))
 
 
 class Enemy():
@@ -355,6 +363,7 @@ class Animus(Enemy):
         target = game.findPlayer(self.x, self.y, 20)
         if target:
             target.hurt()
+            game.room.enemies.remove(self)
 
     def hurt(self):
         self.hp-=1
@@ -412,6 +421,7 @@ class Pufferfish(Enemy):
 
             self.stateTimer+=1
             if self.stateTimer>=90:
+                self.image = self.idleImage
                 self.state = 0
 
     def hurt(self):
@@ -422,14 +432,16 @@ class Robot(Enemy):
 
     radius = 20
     imageSize = 64
-    idleImage = loadTexture("enemies/robot/idle.png", imageSize)
+    idleImages = [loadTexture("enemies/robot/idle.png", imageSize), loadTexture("enemies/robot/idleb.png", imageSize)]
     hurtImage = loadTexture("enemies/robot/stunned.png", imageSize)
+    fireImage = loadTexture("enemies/robot/fire.png", imageSize)
 
     def __init__(self, x, y, hasClone=True):
         super(Robot, self).__init__(x,y)
-        self.image = self.idleImage
+        self.image = self.idleImages[0]
         self.hp = 3
         self.hasClone = hasClone
+        self.alone = False
         if hasClone:
             self.clone = Robot(x+200,y, hasClone=False)
             game.room.enemies.append(self.clone)
@@ -440,7 +452,8 @@ class Robot(Enemy):
 
         if self.hasClone:
             if self.clone.hp <= 0:
-                self.hasClone = 0
+                self.hasClone = False
+                self.alone = True
 
         #HURT
         if self.state == -1:
@@ -450,16 +463,33 @@ class Robot(Enemy):
             if self.stateTimer<=0:
                 if self.hp<=0:
                     game.room.enemies.remove(self)
+                    if self.hasClone:
+                        self.clone.alone = True
                 else:
                     self.state = 0
-                    self.image = self.idleImage
 
         #IDLE
         if self.state == 0:
+            self.image = random.choice(self.idleImages)
             if self.hasClone:
                 randomPoint = random.random()
-                if game.findPlayer(self.x+(self.clone.x-self.x)*randomPoint, self.y+(self.clone.y-self.y)*randomPoint, 10):
+                if game.findPlayer(self.x+10+(self.clone.x-self.x)*randomPoint, self.y+10+(self.clone.y-self.y)*randomPoint, 4):
                     game.player.hurt()
+            if self.alone:
+                if random.random()<0.01:
+                    self.state = 1
+                    self.stateTimer = 0
+
+        if self.state == 1:
+            self.image = self.fireImage
+            self.stateTimer+=1
+            if self.stateTimer==10:
+                d = math.sqrt((self.x-game.player.x)**2 + (self.y-game.player.y)**2)
+                dx = (game.player.x-self.x)/d
+                dy = (game.player.y-self.y)/d
+                game.room.projectiles.append(Missile(self.x, self.y, dx*3, dy*3))
+            if self.stateTimer>=20:
+                self.state = 0
 
     def hurt(self):
         self.hp-=1
@@ -470,6 +500,49 @@ class Robot(Enemy):
         if self.hasClone and self.state == 0 and self.clone.state == 0:
             pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (self.x+10,self.y), (self.clone.x+10, self.clone.y), random.randint(1,8))
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+
+class Projectile():
+    def __init__(self, x, y, xv, yv):
+        self.x = x
+        self.y = y
+        self.xv = xv
+        self.yv = yv
+    
+    def update(self):
+        self.x+=self.xv
+        self.y+=self.yv
+
+    def draw(self):
+        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+
+class Missile(Projectile):
+
+    radius = 10
+    imageSize = 64
+    image = loadTexture("enemies/robot/proj.png", imageSize)
+
+    def update(self):
+        super(Missile, self).update()
+
+        # HIT PLAYER
+        if game.findPlayer(self.x, self.y, self.radius):
+            game.player.hurt()
+            game.room.projectiles.remove(self)
+class Sapphire(Projectile):
+
+    radius = 10
+    imageSize = 64
+    image = loadTexture("player/sapphire.png", imageSize)
+
+    def update(self):
+        super(Sapphire, self).update()
+
+        # HIT ENEMIES
+        targets =  game.findEnemies(self.x, self.y, self.radius)
+        for target in targets:
+            target.hurt()
+        if targets:
+            game.room.projectiles.remove(self)
 
 class Item():
 
@@ -493,14 +566,14 @@ class Fruit(Item):
     image = loadTexture("items/fruit.png", imageSize)
 
     def pickup(self):
-        game.player.movementSpeed+=0.5
+        game.player.movementSpeed+=1
 class Stick(Item):
 
     imageSize = 128
     image = loadTexture("items/stick.png", imageSize)
 
     def pickup(self):
-        game.player.swipeRange+=10
+        game.player.swipeRange+=16
 class Fan(Item):
 
     imageSize = 128
@@ -508,8 +581,23 @@ class Fan(Item):
 
     def pickup(self):
         game.player.fanRoll-=3
+class Heart(Item):
 
-allItems=[Fruit,Stick,Fan]
+    imageSize = 128
+    image = loadTexture("items/heart.png", imageSize)
+
+    def pickup(self):
+        game.player.hp+=1
+class Icecrystal(Item):
+
+    imageSize = 64
+    image = loadTexture("items/icecrystal.png", imageSize)
+
+    def pickup(self):
+        game.player.icecrystal+=1
+
+directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
+allItems=[Fruit,Stick,Fan,Heart,Icecrystal]
 roomPresets=[
     # [[
     # createF([Animus],10,10),
@@ -536,15 +624,15 @@ roomPresets=[
     ],], # Test Room
 ]
 
+
 gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")
-#pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "puncher", "idle.png")))
+pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player", "player.png")))
 
 initSound()
 
 game = Game()
 game.enterFloor(Floor(roomPresets))
-print(game.floor.roomPosList)
 
 jump_out = False
 while jump_out == False:

@@ -72,7 +72,8 @@ def createF(names,x,y,occurance=1):
 
 class Floor():
     def __init__(self,presets):
-        self.rooms=[Room([[],[]],[0,0])]
+        self.startRoom = Room([[],[]],[0,0]) # first room is empty
+        self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
         for i in range(random.randint(5,9)):
             roomPos=[0,0]
@@ -146,9 +147,9 @@ class Game():
         self.player.update()
 
     def enterFloor(self,floor):
-        game.floor=floor
-        game.room=random.choice(floor.rooms)
-        game.room.loadRoom()
+        self.floor=floor
+        self.room=self.floor.startRoom # a start room is niec
+        self.room.loadRoom()
 
     def findEnemies(self, x,y, r): #hitdetection (idk if aoe is necessary or wathever)
         targets = []
@@ -361,6 +362,12 @@ class Animus(Enemy):
     def update(self):
         super(Animus, self).update()
 
+        self.x += random.randint(-1,1)
+        self.y += random.randint(-1,1)
+
+        if random.random()<0.001:
+            game.room.enemies.append(Animus(self.x,self.y))
+
         #ATTACK
         target = game.findPlayer(self.x, self.y, 20)
         if target:
@@ -482,6 +489,7 @@ class Robot(Enemy):
                     self.state = 1
                     self.stateTimer = 0
 
+        # SHOOT
         if self.state == 1:
             self.image = self.fireImage
             self.stateTimer+=1
@@ -490,7 +498,7 @@ class Robot(Enemy):
                 dx = (game.player.x-self.x)/d
                 dy = (game.player.y-self.y)/d
                 game.room.projectiles.append(Missile(self.x, self.y, dx*3, dy*3))
-            if self.stateTimer>=20:
+            if self.stateTimer>=30:
                 self.state = 0
 
     def hurt(self):
@@ -575,7 +583,7 @@ class Stick(Item):
     image = loadTexture("items/stick.png", imageSize)
 
     def pickup(self):
-        game.player.swipeRange+=16
+        game.player.swipeRange+=20
 class Fan(Item):
 
     imageSize = 128
@@ -656,7 +664,7 @@ roomPresets=[
 
     [[
     ],[
-    createF(Heart,600,350),
+    createF([Heart],lambda :random.randint(500,700),lambda :random.randint(300,400)),
     ],], # Heal
 
     [[

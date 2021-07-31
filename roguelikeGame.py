@@ -4,6 +4,16 @@ import random
 import os
 import math
 
+# sacker man kan göra at göra
+"""
+boss
+flera floors
+texturemark
+små rum
+visa items
+ny content
+"""
+
 clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
@@ -72,10 +82,32 @@ def createF(names,x,y,occurance=1, lootTable=None):
             return thing
         return None
     return create
+def createWallF(x,y,w,h,occurance=1):
+    def createWall():
+        if(random.random()<occurance):
+            if(callable(x)):
+                posX=x()
+            else:
+                posX=x
+            if(callable(y)):
+                posY=y()
+            else:
+                posY=y
+            if(callable(w)):
+                width=w()
+            else:
+                width=w
+            if(callable(h)):
+                height=h()
+            else:
+                height=h 
+            return Wall(posX,posY,width,height)
+        return None
+    return createWall
 
 class Floor():
     def __init__(self,presets):
-        self.startRoom = Room([[],[]],[0,0]) # first room is empty
+        self.startRoom = Room([[createWallF(500,400,200,100),],[],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
         for i in range(random.randint(5,19)):
@@ -106,6 +138,7 @@ class Room():
     def __init__(self,preset,floorPos):
         self.enemies = []
         self.items = []
+        self.walls = []
         self.projectiles = []
         self.preset=preset
         self.links=[None,None,None,None] # Up, Right, Down, Left
@@ -115,10 +148,14 @@ class Room():
     def loadRoom(self):
         if(not self.alreadyLoaded):
             for f in self.preset[0]:
+                wall = f()
+                if(wall):
+                    self.walls.append(wall)
+            for f in self.preset[1]:
                 enemy = f()
                 if(enemy):
                     self.enemies.append(enemy)
-            for f in self.preset[1]:
+            for f in self.preset[2]:
                 item = f()
                 if(item):
                     self.items.append(item)
@@ -131,7 +168,8 @@ class Room():
         for enemy in self.enemies:
             enemy.update()
     def draw(self):
-
+        for wall in self.walls:
+            wall.draw()
         for item in self.items:
             item.draw()
         for proj in self.projectiles:
@@ -186,6 +224,45 @@ class Game():
         self.player.draw()
         self.floor.drawMinimap()
 
+class Wall():
+
+    def __init__(self, x, y, width, height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+
+    def adjust(self, other, proj=0):
+        dx = self.width//2+other.radius
+        dy = self.height//2+other.radius
+        if self.x-dx < other.x < self.x+dx:
+            if self.y-dy < other.y < self.y+dy: #is inside?
+
+                if other.x - (self.x-dx) < (self.x+dx) - other.x: #find closest side
+                    dx = other.x - (self.x-dx)
+                else:
+                    dx = other.x - (self.x+dx)
+                if other.y - (self.y-dy) < (self.y+dy) - other.y:
+                    dy = other.y - (self.y-dy)
+                else:
+                    dy = other.y - (self.y+dy)
+
+                if proj: # handle projs (man kan flytta dem också dx ut från väggen om man vill i guess)
+                    if abs(dx)<abs(dy): # (abs slow?)
+                        other.xv*=-1
+                        other.edge()
+                    else:
+                        other.yv*=-1
+                        other.edge()
+                else:
+                    if abs(dx)<abs(dy):
+                        other.x-=dx
+                    else:
+                        other.y-=dy
+
+    def draw(self):
+        pygame.draw.rect(gameDisplay, (50,50,50), (self.x-self.width//2, self.y-self.height//2, self.width, self.height),0)
+
 class Player():
 
     radius = 20
@@ -212,8 +289,8 @@ class Player():
         self.rollSpeed = 4
         self.fanRoll = 0 #3?
         self.swipeRange = 20
-        self.icecrystal = 0
-        self.projBounces = 0
+        self.icecrystal = 2
+        self.projBounces = 2
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -317,6 +394,8 @@ class Player():
                 self.y=display[1]-10
             else:
                 self.y=0
+        for wall in game.room.walls:
+            wall.adjust(self)
 
     def hurt(self):
         self.image = self.hurtImage
@@ -358,6 +437,9 @@ class Enemy():
             self.y=display[1]
         elif(self.y<0):
             self.y=0
+
+        for wall in game.room.walls:
+            wall.adjust(self)
 
     def basicMove(self):
         dx = (self.x<game.player.x)*2 -1
@@ -414,7 +496,7 @@ class Chest(Enemy):
         self.stateTimer = 20
 class Animus(Enemy):
 
-    radius = 30
+    radius = 24
     imageSize = 64
     idleImage = loadTexture("enemies/animus.png", imageSize)
 
@@ -604,8 +686,10 @@ class Projectile():
             self.edge()
             self.yv*=-1
 
+        for wall in game.room.walls:
+            wall.adjust(self, proj=1)
+
     def edge(self):
-        print(self.bounces)
         if self.bounces == 0:
             game.room.projectiles.remove(self)
         self.bounces-=1
@@ -711,6 +795,9 @@ directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer]
 roomPresets=[
     [[
+    createWallF(100,100,200,100),
+    createWallF(800,lambda :random.randint(1,600),150,50),
+    ],[
     createF([Chest],100,100, lootTable=[None,Fruit]),
     createF([Animus,Pufferfish,Robot],150,50),
     createF([Robot],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
@@ -719,7 +806,11 @@ roomPresets=[
     createF(allItems,10,150),
     createF([Fruit],200,400,occurance=0.5),
     ],], # Test Room using everything
+
     [[
+    createWallF(100,100,200,100),
+    createWallF(800,lambda :random.randint(1,600),150,50),
+    ],[
     createF([Animus],600,350),
     createF([Pufferfish],400,350,occurance=0.2),
     createF([Pufferfish],800,350,occurance=0.2),
@@ -728,12 +819,16 @@ roomPresets=[
     ],], # Test Room
     
     [[
+    createWallF(100,100,200,100),
+    createWallF(800,lambda :random.randint(1,600),150,50),
+    ],[
     createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
     ],[
     createF(allItems,600,500, occurance=0.1),
     ],], # Test Room
 
     [[
+    ],[
     createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
     createF([Animus],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
     createF([Pufferfish],600,350),
@@ -744,6 +839,7 @@ roomPresets=[
     ],], # Ellas Room
 
     [[
+    ],[
     createF([Chest],600,350),
     createF([Animus,Pufferfish],500,300),
     createF([Animus,Pufferfish],700,300),
@@ -755,6 +851,7 @@ roomPresets=[
     ],], # Pentagon
 
     [[
+    ],[
     createF([Chest],600,350)
     ]+[
     createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600), occurance=0.8),
@@ -765,10 +862,13 @@ roomPresets=[
 
     [[
     ],[
+    ],[
     createF([Heart],lambda :random.randint(500,700),lambda :random.randint(300,400)),
     ],], # Heal
 
     [[
+    createWallF(600,350,100,100, occurance=0.5),
+    ],[
     createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
     createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
     createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.8),

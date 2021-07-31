@@ -55,7 +55,7 @@ def loadTexture(name, w,h=None, mirror=False):
     else:
         return image
 
-def createF(names,x,y,occurance=1):
+def createF(names,x,y,occurance=1, lootTable=None):
     def create():
         if(random.random()<occurance):
             if(callable(x)):
@@ -66,7 +66,10 @@ def createF(names,x,y,occurance=1):
                 posY=y()
             else:
                 posY=y
-            return random.choice(names)(posX,posY)
+            thing = random.choice(names)(posX,posY)
+            if lootTable:
+                thing.lootTable = lootTable
+            return thing
         return None
     return create
 
@@ -75,7 +78,7 @@ class Floor():
         self.startRoom = Room([[],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
-        for i in range(random.randint(5,9)):
+        for i in range(random.randint(5,19)):
             roomPos=[0,0]
             while roomPos in self.roomPosList:
                 connectedRoom = random.choice(self.rooms)
@@ -148,15 +151,23 @@ class Game():
 
     def enterFloor(self,floor):
         self.floor=floor
-        self.room=self.floor.startRoom # a start room is niec
+        self.room=self.floor.startRoom
         self.room.loadRoom()
 
-    def findEnemies(self, x,y, r): #hitdetection (idk if aoe is necessary or wathever)
+    def findEnemies(self, x,y, r): #hitdetection
         targets = []
         for enemy in self.room.enemies:
             d = r+enemy.radius
             if (enemy.x-x)**2 + (enemy.y-y)**2 < d**2:
                 targets.append(enemy)
+        return targets
+
+    def findProjectiles(self, x,y, r):
+        targets = []
+        for proj in self.room.projectiles:
+            d = r+proj.radius
+            if (proj.x-x)**2 + (proj.y-y)**2 < d**2:
+                targets.append(proj)
         return targets
 
     def findPlayer(self, x,y, r):
@@ -202,6 +213,7 @@ class Player():
         self.fanRoll = 0 #3?
         self.swipeRange = 20
         self.icecrystal = 0
+        self.projBounces = 0
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -262,10 +274,15 @@ class Player():
                 self.x+=self.xdir*self.rollSpeed#*self.movementSpeed
                 self.y+=self.ydir*self.rollSpeed#*self.movementSpeed
                 # fanRoll
-                targets = game.findEnemies(self.x,self.y,self.radius)
+                targets = game.findEnemies(self.x,self.y,self.radius*self.fanRoll)
                 for target in targets:
                     target.x+=self.xdir*self.fanRoll
                     target.y+=self.ydir*self.fanRoll
+                targets = game.findProjectiles(self.x,self.y,self.radius*self.fanRoll)
+                for target in targets:
+                    target.xv=self.xdir*self.fanRoll
+                    target.yv=self.ydir*self.fanRoll
+
             else:
                 self.image = self.rollImages[0]
             self.stateTimer+=1
@@ -333,21 +350,68 @@ class Enemy():
         self.movementSpeed = 1
 
     def update(self):
-        if self.state == 0:
-            dx = (self.x<game.player.x)*2 -1
-            dy = (self.y<game.player.y)*2 -1
-            if dx or dy:
-                self.x += dx*self.movementSpeed
-                self.y += dy*self.movementSpeed
-                #self.image = random.choice(self.walkImages+[self.idleImage])
-            else:
-                pass
-                #self.image = self.idleImage
+        if(self.x>display[0]):
+            self.x=display[0]
+        elif(self.x<0):
+            self.x=0
+        elif(self.y>display[1]):
+            self.y=display[1]
+        elif(self.y<0):
+            self.y=0
+
+    def basicMove(self):
+        dx = (self.x<game.player.x)*2 -1
+        dy = (self.y<game.player.y)*2 -1
+        if dx or dy:
+            self.x += dx*self.movementSpeed
+            self.y += dy*self.movementSpeed
+            #self.image = random.choice(self.walkImages+[self.idleImage])
+        else:
+            pass
+            #self.image = self.idleImage
 
     def draw(self):
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
 
+class Chest(Enemy):
+
+    radius = 30
+    imageSize = 128
+    idleImage = loadTexture("enemies/chest1.png", imageSize)
+    hurtImage = loadTexture("enemies/chest2.png", imageSize)
+
+    def __init__(self, x, y):
+        super(Chest, self).__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 1
+        self.lootTable = allItems
+
+    def update(self):
+        super(Chest, self).update()
+
+        #if random.random()<0.001:
+         #   game.room.enemies.append(Animus(self.x,self.y))
+        
+        #HURT
+        if self.state == -1:
+            self.image = self.hurtImage
+
+            self.stateTimer-=1 #här går den neråt
+            if self.stateTimer<=0:
+                if self.hp<=0:
+                    loot = random.choice(self.lootTable)
+                    if loot:
+                        game.room.items.append(loot(self.x,self.y))
+                    game.room.enemies.remove(self)
+                else:
+                    self.state = 0
+                    self.image = self.idleImage
+
+    def hurt(self):
+        self.hp-=1
+        self.state = -1
+        self.stateTimer = 20
 class Animus(Enemy):
 
     radius = 30
@@ -360,10 +424,11 @@ class Animus(Enemy):
         self.hp = 1
 
     def update(self):
-        super(Animus, self).update()
-
+        self.basicMove()
         self.x += random.randint(-1,1)
         self.y += random.randint(-1,1)
+
+        super(Animus, self).update()
 
         if random.random()<0.001:
             game.room.enemies.append(Animus(self.x,self.y))
@@ -408,6 +473,7 @@ class Pufferfish(Enemy):
 
         #IDLE
         if self.state == 0:
+            self.basicMove()
             if game.findPlayer(self.x, self.y, 20):
                 self.state = 1
                 self.stateTimer = 0
@@ -458,6 +524,8 @@ class Robot(Enemy):
     def update(self):
         self.x += random.randint(-2,2)
         self.y += random.randint(-2,2)
+
+        super(Robot, self).update()
 
         if self.hasClone:
             if self.clone.hp <= 0:
@@ -517,10 +585,30 @@ class Projectile():
         self.y = y
         self.xv = xv
         self.yv = yv
+        self.bounces = 0
     
     def update(self):
         self.x+=self.xv
         self.y+=self.yv
+
+        if(self.x>display[0]):
+            self.edge()
+            self.xv*=-1
+        elif(self.x<0):
+            self.edge()
+            self.xv*=-1
+        elif(self.y>display[1]):
+            self.edge()
+            self.yv*=-1
+        elif(self.y<0):
+            self.edge()
+            self.yv*=-1
+
+    def edge(self):
+        print(self.bounces)
+        if self.bounces == 0:
+            game.room.projectiles.remove(self)
+        self.bounces-=1
 
     def draw(self):
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
@@ -544,6 +632,10 @@ class Sapphire(Projectile):
     imageSize = 64
     image = loadTexture("player/sapphire.png", imageSize)
 
+    def __init__(self, x, y, xv, yv):
+        super(Sapphire, self).__init__(x,y,xv,yv)
+        self.bounces = game.player.projBounces
+
     def update(self):
         super(Sapphire, self).update()
 
@@ -561,11 +653,14 @@ class Item():
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.age=0
 
     def update(self):
-        if game.findPlayer(self.x,self.y, self.radius):
-            self.pickup()
-            game.room.items.remove(self)
+        self.age+=1
+        if self.age>20:
+            if game.findPlayer(self.x,self.y, self.radius):
+                self.pickup()
+                game.room.items.remove(self)
 
     def draw(self):
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
@@ -590,7 +685,7 @@ class Fan(Item):
     image = loadTexture("items/fan.png", imageSize)
 
     def pickup(self):
-        game.player.fanRoll-=3
+        game.player.fanRoll+=3
 class Heart(Item):
 
     imageSize = 128
@@ -605,19 +700,25 @@ class Icecrystal(Item):
 
     def pickup(self):
         game.player.icecrystal+=1
+class Bouncer(Item):
+    imageSize = 64
+    image = loadTexture("items/bouncer.png", imageSize)
+
+    def pickup(self):
+        game.player.projBounces+=1
 
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-allItems=[Fruit,Stick,Fan,Heart,Icecrystal]
+allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer]
 roomPresets=[
-    # [[
-    # createF([Animus],10,10),
-    # createF([Animus,Pufferfish,Robot],150,50),
-    # createF([Robot],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
-    # ],[
-    # createF([Fruit],10,150),
-    # createF(allItems,10,150),
-    # createF([Fruit],200,400,occurance=0.5),
-    # ],], # Test Room using everything
+    [[
+    createF([Chest],100,100, lootTable=[None,Fruit]),
+    createF([Animus,Pufferfish,Robot],150,50),
+    createF([Robot],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
+    ],[
+    createF([Fruit],10,150),
+    createF(allItems,10,150),
+    createF([Fruit],200,400,occurance=0.5),
+    ],], # Test Room using everything
     [[
     createF([Animus],600,350),
     createF([Pufferfish],400,350,occurance=0.2),
@@ -629,7 +730,7 @@ roomPresets=[
     [[
     createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
     ],[
-    createF(allItems,600,500),
+    createF(allItems,600,500, occurance=0.1),
     ],], # Test Room
 
     [[
@@ -643,23 +744,23 @@ roomPresets=[
     ],], # Ellas Room
 
     [[
+    createF([Chest],600,350),
     createF([Animus,Pufferfish],500,300),
     createF([Animus,Pufferfish],700,300),
     createF([Animus,Pufferfish],600,250),
     createF([Animus,Pufferfish],550,450),
     createF([Animus,Pufferfish],650,450),
     ],[
-    createF([Icecrystal,Icecrystal,Heart],600,350),
-    ],], # Ice Crystal
+    #createF(allItems,600,350),
+    ],], # Pentagon
 
     [[
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600)),
-    ],[
-    createF(allItems,600,350),
+    createF([Chest],600,350)
+    ]+[
+    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600), occurance=0.8),
+    ]*5,
+    [
+    #createF(allItems,600,350),
     ],], # Laser Room
 
     [[
@@ -699,3 +800,5 @@ while jump_out == False:
     
 pygame.quit()
 quit()
+
+#  sssssswa

@@ -218,10 +218,10 @@ class Game():
 
     def draw(self):
         gameDisplay.fill((100,100,100))
-        for i in range(self.player.hp):
-            pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
         self.room.draw()
         self.player.draw()
+        for i in range(self.player.hp):
+            pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
         self.floor.drawMinimap()
 
 class Wall():
@@ -289,8 +289,8 @@ class Player():
         self.rollSpeed = 4
         self.fanRoll = 0 #3?
         self.swipeRange = 20
-        self.icecrystal = 2
-        self.projBounces = 2
+        self.icecrystal = 0
+        self.projBounces = 0
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -516,7 +516,7 @@ class Animus(Enemy):
             game.room.enemies.append(Animus(self.x,self.y))
 
         #ATTACK
-        target = game.findPlayer(self.x, self.y, 20)
+        target = game.findPlayer(self.x, self.y, 16)
         if target:
             target.hurt()
             game.room.enemies.remove(self)
@@ -527,7 +527,7 @@ class Animus(Enemy):
             game.room.enemies.remove(self)
 class Pufferfish(Enemy):
 
-    radius = 20
+    radius = 8
     imageSize = 64
     idleImage = loadTexture("enemies/pufferfish/idle.png", imageSize)
     hurtImage = loadTexture("enemies/pufferfish/stunned.png", imageSize)
@@ -556,7 +556,7 @@ class Pufferfish(Enemy):
         #IDLE
         if self.state == 0:
             self.basicMove()
-            if game.findPlayer(self.x, self.y, 20):
+            if game.findPlayer(self.x, self.y, 16):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -568,7 +568,7 @@ class Pufferfish(Enemy):
                 self.image = self.attackImages[1]
             if self.stateTimer==20:
                 self.image = self.attackImages[2]
-                target = game.findPlayer(self.x, self.y, 20)
+                target = game.findPlayer(self.x, self.y, 16)
                 if target:
                     target.hurt()
             if self.stateTimer==50:
@@ -796,7 +796,7 @@ allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer]
 roomPresets=[
     [[
     createWallF(100,100,200,100),
-    createWallF(800,lambda :random.randint(1,600),150,50),
+    createWallF(800,lambda :random.randint(1,600),lambda :random.randint(1,600),50),
     ],[
     createF([Chest],100,100, lootTable=[None,Fruit]),
     createF([Animus,Pufferfish,Robot],150,50),
@@ -808,8 +808,12 @@ roomPresets=[
     ],], # Test Room using everything
 
     [[
-    createWallF(100,100,200,100),
-    createWallF(800,lambda :random.randint(1,600),150,50),
+    createWallF(400,300,120,20,occurance=0.2),
+    createWallF(800,300,120,20,occurance=0.2),
+    createWallF(450,400,20,220,occurance=0.3),
+    createWallF(750,400,20,220,occurance=0.3),
+    createWallF(600,500,320,20,occurance=0.2),
+    createWallF(600,300,320,20,occurance=0.2),
     ],[
     createF([Animus],600,350),
     createF([Pufferfish],400,350,occurance=0.2),
@@ -851,6 +855,8 @@ roomPresets=[
     ],], # Pentagon
 
     [[
+    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.5),
+    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.5),
     ],[
     createF([Chest],600,350)
     ]+[
@@ -867,6 +873,7 @@ roomPresets=[
     ],], # Heal
 
     [[
+    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.5),
     createWallF(600,350,100,100, occurance=0.5),
     ],[
     createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
@@ -900,5 +907,3 @@ while jump_out == False:
     
 pygame.quit()
 quit()
-
-#  sssssswa

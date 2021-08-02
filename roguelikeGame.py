@@ -107,7 +107,7 @@ def createWallF(x,y,w,h,occurance=1):
 
 class Floor():
     def __init__(self,presets):
-        self.startRoom = Room([[createWallF(500,400,200,100),],[],[]],[0,0]) # first room is empty
+        self.startRoom = Room([[createWallF(700,450,200,100),],[createF([Chest],700,350),],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
         for i in range(random.randint(5,19)):
@@ -292,6 +292,7 @@ class Player():
         self.swipeRange = 20
         self.icecrystal = 0
         self.projBounces = 0
+        self.iceBody = 0
 
     def update(self):
         pressed = pygame.key.get_pressed()
@@ -337,7 +338,8 @@ class Player():
                 for target in targets:
                     target.hurt()
                 for i in range(self.icecrystal):
-                    game.room.projectiles.append(Sapphire(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
+                    if random.random()<0.5:
+                        game.room.projectiles.append(Sapphire(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
             else:
                 self.image = self.attackImages[1]
 
@@ -403,6 +405,10 @@ class Player():
         self.hp-=1
         self.state = -1
         self.stateTimer = 0
+        if self.iceBody:
+            targets = game.findEnemies(self.x, self.y, self.radius*self.iceBody*2)
+            for target in targets:
+                target.state = -2
 
     def draw(self):
 
@@ -418,14 +424,18 @@ class Player():
 
         # YOU
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y-8) - self.imageSize//2))
+        if self.iceBody:
+            gameDisplay.blit(IceShield.image, (int(self.x-4) - IceShield.imageSize//2, int(self.y-4) - IceShield.imageSize//2))
 
 
 class Enemy():
 
+    frozenImage = loadTexture("enemies/ice.png", 128)
+
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.state = 0
+        self.state = 0 # -2 frozen, -1:hurt, 0:idle
         self.stateTimer = 0
         self.movementSpeed = 1
 
@@ -442,6 +452,9 @@ class Enemy():
         for wall in game.room.walls:
             wall.adjust(self)
 
+        if self.state == -2:
+            self.image = self.idleImage
+
     def basicMove(self):
         dx = (self.x<game.player.x)*2 -1
         dy = (self.y<game.player.y)*2 -1
@@ -454,6 +467,8 @@ class Enemy():
             #self.image = self.idleImage
 
     def draw(self):
+        if self.state==-2:
+            gameDisplay.blit(self.frozenImage, (int(self.x) - 128//2, int(self.y) - 128//2))
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
 
@@ -507,9 +522,10 @@ class Animus(Enemy):
         self.hp = 1
 
     def update(self):
-        self.basicMove()
-        self.x += random.randint(-1,1)
-        self.y += random.randint(-1,1)
+        if self.state == 0:
+            self.basicMove()
+            self.x += random.randint(-1,1)
+            self.y += random.randint(-1,1)
 
         super(Animus, self).update()
 
@@ -590,13 +606,14 @@ class Robot(Enemy):
 
     radius = 20
     imageSize = 64
-    idleImages = [loadTexture("enemies/robot/idle.png", imageSize), loadTexture("enemies/robot/idleb.png", imageSize)]
+    idleImage = loadTexture("enemies/robot/idle.png", imageSize)
+    walkImage = loadTexture("enemies/robot/idleb.png", imageSize)
     hurtImage = loadTexture("enemies/robot/stunned.png", imageSize)
     fireImage = loadTexture("enemies/robot/fire.png", imageSize)
 
     def __init__(self, x, y, hasClone=True):
         super(Robot, self).__init__(x,y)
-        self.image = self.idleImages[0]
+        self.image = self.idleImage
         self.hp = 3
         self.hasClone = hasClone
         self.alone = False
@@ -605,8 +622,6 @@ class Robot(Enemy):
             game.room.enemies.append(self.clone)
 
     def update(self):
-        self.x += random.randint(-2,2)
-        self.y += random.randint(-2,2)
 
         super(Robot, self).update()
 
@@ -630,7 +645,9 @@ class Robot(Enemy):
 
         #IDLE
         if self.state == 0:
-            self.image = random.choice(self.idleImages)
+            self.x += random.randint(-2,2)
+            self.y += random.randint(-2,2)
+            self.image = random.choice([self.idleImage, self.walkImage])
             if self.hasClone:
                 randomPoint = random.random()
                 if game.findPlayer(self.x+10+(self.clone.x-self.x)*randomPoint, self.y+10+(self.clone.y-self.y)*randomPoint, 4):
@@ -660,7 +677,7 @@ class Robot(Enemy):
     def draw(self):
         if self.hasClone and self.state == 0 and self.clone.state == 0:
             pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (self.x+10,self.y), (self.clone.x+10, self.clone.y), random.randint(1,8))
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+        super(Robot, self).draw()
 class SkuggVarg(Enemy): 
     # "kolmården"
 
@@ -784,7 +801,7 @@ class Sapphire(Projectile):
         # HIT ENEMIES
         targets =  game.findEnemies(self.x, self.y, self.radius)
         for target in targets:
-            target.hurt()
+            target.state=-2
         if targets:
             game.room.projectiles.remove(self)
 
@@ -848,9 +865,15 @@ class Bouncer(Item):
 
     def pickup(self):
         game.player.projBounces+=1
+class IceShield(Item):
+    imageSize = 128
+    image = loadTexture("items/iceShield.png", imageSize)
+
+    def pickup(self):
+        game.player.iceBody+=1
 
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer]
+allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer,IceShield]
 roomPresets=[
     [[
     createWallF(100,100,200,100),
@@ -877,7 +900,7 @@ roomPresets=[
     createF([Pufferfish],400,350,occurance=0.2),
     createF([Pufferfish],800,350,occurance=0.2),
     ],[
-    createF([Fruit],600,500,occurance=0.5),
+    createF([Fruit],600,450,occurance=0.5),
     ],], # Test Room
     
     [[
@@ -913,8 +936,8 @@ roomPresets=[
     ],], # Pentagon
 
     [[
-    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.5),
-    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.5),
+    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(20,1000),lambda :random.randint(20,500), occurance=0.5),
+    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(20,1000),lambda :random.randint(20,500), occurance=0.5),
     ],[
     createF([Chest],600,350)
     ]+[
@@ -931,7 +954,7 @@ roomPresets=[
     ],], # Heal
 
     [[
-    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.5),
+    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(20,1000),lambda :random.randint(20,500), occurance=0.5),
     createWallF(600,350,100,100, occurance=0.5),
     ],[
     createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
@@ -941,13 +964,14 @@ roomPresets=[
     ],], # Animals
 
     [[
-    createWallF(lambda :random.randint(2,10)*100,lambda :random.randint(2,5)*100,220,20),
+    createWallF(lambda :random.randint(1,11)*100,lambda :random.randint(1,6)*100,220,20),
     ]*8+[
-    createWallF(lambda :random.randint(2,10)*100,lambda :random.randint(2,5)*100,20,220),
+    createWallF(lambda :random.randint(1,11)*100,lambda :random.randint(1,6)*100,20,220),
     ]*8,[
-    createF([SkuggVarg],600,350),
+    createF([SkuggVarg],650,350),
+    createF([Chest],550,350, occurance=0.8),
     ],[
-    createF([Heart],600,350),
+    createF([Heart],750,350, occurance=0.5),
     ],], # Minotaur
 ]
 
@@ -975,3 +999,5 @@ while jump_out == False:
     
 pygame.quit()
 quit()
+
+#

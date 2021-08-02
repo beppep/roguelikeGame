@@ -120,6 +120,7 @@ class Floor():
                 roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers
             self.roomPosList.append(roomPos)
             room = Room(random.choice(presets),roomPos)
+            #room = Room(presets[-1],roomPos)
             self.rooms.append(room)
             connectedRoom.links[connectionDirection]=room
             room.links[(connectionDirection+2)%4]=connectedRoom
@@ -458,7 +459,7 @@ class Enemy():
 
 class Chest(Enemy):
 
-    radius = 30
+    radius = 48
     imageSize = 128
     idleImage = loadTexture("enemies/chest1.png", imageSize)
     hurtImage = loadTexture("enemies/chest2.png", imageSize)
@@ -564,20 +565,20 @@ class Pufferfish(Enemy):
         if self.state == 1:
             if self.stateTimer==0:
                 self.image = self.attackImages[0]
-            if self.stateTimer==10:
+            if self.stateTimer==7:
                 self.image = self.attackImages[1]
-            if self.stateTimer==20:
+            if self.stateTimer==14:
                 self.image = self.attackImages[2]
                 target = game.findPlayer(self.x, self.y, 16)
                 if target:
                     target.hurt()
-            if self.stateTimer==50:
+            if self.stateTimer==30:
                 self.image = self.attackImages[1]
-            if self.stateTimer==70:
+            if self.stateTimer==45:
                 self.image = self.attackImages[0]
 
             self.stateTimer+=1
-            if self.stateTimer>=90:
+            if self.stateTimer>=60:
                 self.image = self.idleImage
                 self.state = 0
 
@@ -660,6 +661,63 @@ class Robot(Enemy):
         if self.hasClone and self.state == 0 and self.clone.state == 0:
             pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (self.x+10,self.y), (self.clone.x+10, self.clone.y), random.randint(1,8))
         gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+class SkuggVarg(Enemy): 
+    # "kolmården"
+
+    radius = 16
+    imageSize = 64
+    idleImage = loadTexture("enemies/skugg/idle.png", imageSize)
+    attackImages = [loadTexture("enemies/skugg/SkuggVarg_"+str(i+38)+".png", Animus.imageSize) for i in range(5)]
+    hurtImage = loadTexture("enemies/skugg/SkuggVarg_68.png", imageSize)
+
+    def __init__(self, x, y):
+        super(SkuggVarg, self).__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 2
+
+    def update(self):
+        super(SkuggVarg, self).update()
+
+        #HURT
+        if self.state == -1:
+            self.image = self.hurtImage
+
+            self.stateTimer-=1 #här går den neråt
+            if self.stateTimer<=0:
+                if self.hp<=0:
+                    game.room.enemies.remove(self)
+                else:
+                    self.state = 0
+                    self.image = self.idleImage
+
+        #IDLE
+        if self.state == 0:
+            self.basicMove()
+            if game.findPlayer(self.x, self.y, 16):
+                self.state = 1
+                self.stateTimer = 0
+
+        #ATTACK
+        if self.state == 1:
+            if self.stateTimer<24:
+                self.image = self.attackImages[self.stateTimer//6]
+            if self.stateTimer==24:
+                self.image = self.attackImages[4]
+                target = game.findPlayer(self.x, self.y, 16)
+                if target:
+                    target.hurt()
+            if self.stateTimer>30:
+                self.image = self.attackImages[(62-self.stateTimer)//8]
+
+            self.stateTimer+=1
+            if self.stateTimer>=62:
+                self.image = self.idleImage
+                self.state = 0
+
+    def hurt(self):
+        self.hp-=1
+        self.state = -1
+        self.stateTimer = 20
 
 class Projectile():
     def __init__(self, x, y, xv, yv):
@@ -800,11 +858,11 @@ roomPresets=[
     ],[
     createF([Chest],100,100, lootTable=[None,Fruit]),
     createF([Animus,Pufferfish,Robot],150,50),
-    createF([Robot],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
+    createF([SkuggVarg],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
     ],[
     createF([Fruit],10,150),
     createF(allItems,10,150),
-    createF([Fruit],200,400,occurance=0.5),
+    createF(allItems+[None],200,400,occurance=0.5),
     ],], # Test Room using everything
 
     [[
@@ -845,11 +903,11 @@ roomPresets=[
     [[
     ],[
     createF([Chest],600,350),
-    createF([Animus,Pufferfish],500,300),
-    createF([Animus,Pufferfish],700,300),
-    createF([Animus,Pufferfish],600,250),
-    createF([Animus,Pufferfish],550,450),
-    createF([Animus,Pufferfish],650,450),
+    createF([Animus,Pufferfish, SkuggVarg],500,300),
+    createF([Animus,Pufferfish, SkuggVarg],700,300),
+    createF([Animus,Pufferfish, SkuggVarg],600,250),
+    createF([Animus,Pufferfish, SkuggVarg],550,450),
+    createF([Animus,Pufferfish, SkuggVarg],650,450),
     ],[
     #createF(allItems,600,350),
     ],], # Pentagon
@@ -881,6 +939,16 @@ roomPresets=[
     createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.8),
     ],[
     ],], # Animals
+
+    [[
+    createWallF(lambda :random.randint(2,10)*100,lambda :random.randint(2,5)*100,220,20),
+    ]*8+[
+    createWallF(lambda :random.randint(2,10)*100,lambda :random.randint(2,5)*100,20,220),
+    ]*8,[
+    createF([SkuggVarg],600,350),
+    ],[
+    createF([Heart],600,350),
+    ],], # Minotaur
 ]
 
 

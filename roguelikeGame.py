@@ -110,7 +110,8 @@ class Floor():
         self.startRoom = Room([[createWallF(700,450,200,100),],[createF([Chest],700,350),],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
-        for i in range(random.randint(5,19)):
+        numOfRooms=random.randint(5,19)
+        for i in range(numOfRooms):
             roomPos=[0,0]
             while roomPos in self.roomPosList:
                 connectedRoom = random.choice(self.rooms)
@@ -119,7 +120,10 @@ class Floor():
                 connectionDirection = random.choice([i for i in range(4) if connectedRoom.links[i]==None ])
                 roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers
             self.roomPosList.append(roomPos)
-            room = Room(random.choice(presets),roomPos)
+            if(i == numOfRooms-1):
+                room = Room([[],[createF([StairCase],700,350),],[]],roomPos) # Final room of floor
+            else:
+                room = Room(random.choice(presets),roomPos)
             #room = Room(presets[-1],roomPos)
             self.rooms.append(room)
             connectedRoom.links[connectionDirection]=room
@@ -871,7 +875,13 @@ class IceShield(Item):
 
     def pickup(self):
         game.player.iceBody+=1
+class StairCase(Item):
+    imageSize = 128
+    image = loadTexture("items/staircase.png", imageSize)
 
+    def pickup(self):
+        game.enterFloor(Floor(roomPresets))
+        game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer,IceShield]
 roomPresets=[

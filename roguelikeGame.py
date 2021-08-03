@@ -7,17 +7,22 @@ import math
 # sacker man kan göra at göra
 """
 boss
-flera floors
+varierade floors
+
 texturemark
-små rum
-visa items
 ny content
+bra AI movement
+Klasser
 """
 
 clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
 display = (1200,700)
+pygame.font.init()
+myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
+
+
 
 def initSound():
     volume = 1
@@ -65,9 +70,9 @@ def loadTexture(name, w,h=None, mirror=False):
     else:
         return image
 
-def createF(names,x,y,occurance=1, lootTable=None):
+def createF(names,x,y,occurance=1, lootTable=None,depth=1):
     def create():
-        if(random.random()<occurance):
+        if(random.random()<occurance and depth<=game.depth):
             if(callable(x)):
                 posX=x()
             else:
@@ -107,7 +112,7 @@ def createWallF(x,y,w,h,occurance=1):
 
 class Floor():
     def __init__(self,presets):
-        self.startRoom = Room([[createWallF(700,450,200,100),],[createF([Chest],700,350),],[]],[0,0]) # first room is empty
+        self.startRoom = Room([[createWallF(350,350,200,50),],[createF([Chest],350,250),],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
         numOfRooms=random.randint(5,19)
@@ -121,7 +126,7 @@ class Floor():
                 roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers
             self.roomPosList.append(roomPos)
             if(i == numOfRooms-1):
-                room = Room([[],[createF([StairCase],700,350),],[]],roomPos) # Final room of floor
+                room = Room([[],[],[createF([StairCase],250,250),]],roomPos) # Final room of floor
             else:
                 room = Room(random.choice(presets),roomPos)
             #room = Room(presets[-1],roomPos)
@@ -146,12 +151,36 @@ class Room():
         self.walls = []
         self.projectiles = []
         self.preset=preset
+        self.roomSize=(500,500)
         self.links=[None,None,None,None] # Up, Right, Down, Left
         self.alreadyLoaded=False
         self.floorPos=floorPos
+        self.wallWidth=50
+        self.doorWidth=30
         
     def loadRoom(self):
         if(not self.alreadyLoaded):
+            if(self.links[0]):
+                self.walls.append(Wall(self.roomSize[0]/4-self.doorWidth,0,self.roomSize[0]/2-self.doorWidth*2,self.wallWidth))
+                self.walls.append(Wall(self.roomSize[0]*3/4+self.doorWidth,0,self.roomSize[0]/2-self.doorWidth*2,self.wallWidth))
+            else:
+                self.walls.append(Wall(self.roomSize[0]/2,0,self.roomSize[0],self.wallWidth))
+            if(self.links[1]):
+                self.walls.append(Wall(self.roomSize[0],self.roomSize[1]/4-self.doorWidth,self.wallWidth,self.roomSize[1]/2-self.doorWidth*2))
+                self.walls.append(Wall(self.roomSize[0],self.roomSize[1]*3/4+self.doorWidth,self.wallWidth,self.roomSize[1]/2-self.doorWidth*2))
+            else:
+                self.walls.append(Wall(self.roomSize[0],self.roomSize[1]/2,self.wallWidth,self.roomSize[1]))
+            if(self.links[2]):
+                self.walls.append(Wall(self.roomSize[0]/4-self.doorWidth,self.roomSize[1],self.roomSize[0]/2-self.doorWidth*2,self.wallWidth))
+                self.walls.append(Wall(self.roomSize[0]*3/4+self.doorWidth,self.roomSize[1],self.roomSize[0]/2-self.doorWidth*2,self.wallWidth))
+            else:
+                self.walls.append(Wall(self.roomSize[0]/2,self.roomSize[1],self.roomSize[0],self.wallWidth))
+            if(self.links[3]):
+                self.walls.append(Wall(0,self.roomSize[1]/4-self.doorWidth,self.wallWidth,self.roomSize[1]/2-self.doorWidth*2))
+                self.walls.append(Wall(0,self.roomSize[1]*3/4+self.doorWidth,self.wallWidth,self.roomSize[1]/2-self.doorWidth*2))
+            else:
+                self.walls.append(Wall(0,self.roomSize[1]/2,self.wallWidth,self.roomSize[1]))
+
             for f in self.preset[0]:
                 wall = f()
                 if(wall):
@@ -173,6 +202,8 @@ class Room():
         for enemy in self.enemies:
             enemy.update()
     def draw(self):
+        roomCorner=((display[0]-self.roomSize[0])/2,(display[1]-self.roomSize[1])/2)
+        pygame.draw.rect(gameDisplay,[0,120,90],[*roomCorner,*self.roomSize])#self.roomSize[0],self.roomSize[1]])
         for wall in self.walls:
             wall.draw()
         for item in self.items:
@@ -184,19 +215,23 @@ class Room():
 class Game():
 
     def __init__(self):
-        self.player = Player(display[0]//2,display[1]//2)
+        self.player = Player(250,250)
         self.room = None
         self.floor = None
+        self.depth = 0
 
     def update(self):
         self.room.update()
         self.player.update()
 
     def enterFloor(self,floor):
+        self.depth+=1
         self.floor=floor
         self.room=self.floor.startRoom
         self.room.loadRoom()
-
+    def remove(self,thing,lst):
+        if( thing in lst):
+            lst.remove(thing)
     def findEnemies(self, x,y, r): #hitdetection
         targets = []
         for enemy in self.room.enemies:
@@ -214,7 +249,7 @@ class Game():
         return targets
 
     def findPlayer(self, x,y, r):
-        if self.player.state==2 and self.player.stateTimer<20:
+        if self.player.state==2 and self.player.stateTimer<20 or self.player.invincibility:
             return 0
         r = r+self.player.radius
         if (self.player.x-x)**2 + (self.player.y-y)**2 < r**2:
@@ -225,9 +260,9 @@ class Game():
         gameDisplay.fill((100,100,100))
         self.room.draw()
         self.player.draw()
-        for i in range(self.player.hp):
-            pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
+        self.player.drawPlayerUI()
         self.floor.drawMinimap()
+
 
 class Wall():
 
@@ -266,7 +301,8 @@ class Wall():
                         other.y-=dy
 
     def draw(self):
-        pygame.draw.rect(gameDisplay, (50,50,50), (self.x-self.width//2, self.y-self.height//2, self.width, self.height),0)
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        pygame.draw.rect(gameDisplay, (50,50,50), (pos[0]-self.width//2, pos[1]-self.height//2, self.width, self.height),0)
 
 class Player():
 
@@ -288,6 +324,7 @@ class Player():
         self.hp = 3
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
+        self.invincibility = 0
         self.image = self.idleImage
 
         self.movementSpeed = 1
@@ -295,11 +332,16 @@ class Player():
         self.fanRoll = 0 #3?
         self.swipeRange = 20
         self.icecrystal = 0
+        self.crystal = 0
         self.projBounces = 0
         self.iceBody = 0
+        self.shownItems = {}
 
     def update(self):
         pressed = pygame.key.get_pressed()
+
+        if self.invincibility>0:
+            self.invincibility-=1
 
         # IDLE
         if self.state == 0:
@@ -333,9 +375,9 @@ class Player():
 
         # ATAKK
         if self.state == 1:
-            if self.stateTimer<10:
+            if self.stateTimer<20:
                 self.image = self.attackImages[0]
-            elif self.stateTimer == 10:
+            elif self.stateTimer == 20:
                 attackX = self.x+self.xdir*self.swipeRange
                 attackY = self.y+self.ydir*self.swipeRange
                 targets = game.findEnemies(attackX, attackY, 30)
@@ -344,6 +386,9 @@ class Player():
                 for i in range(self.icecrystal):
                     if random.random()<0.5:
                         game.room.projectiles.append(Sapphire(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
+                for i in range(self.crystal):
+                    if random.random()<0.5:
+                        game.room.projectiles.append(Ruby(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
             else:
                 self.image = self.attackImages[1]
 
@@ -373,32 +418,32 @@ class Player():
             if self.stateTimer>=40:
                 self.state = 0
 
-        if(self.x>display[0]):
+        if(self.x>game.room.roomSize[0]):
             if(game.room.links[1]):
                 game.room=game.room.links[1]
                 game.room.loadRoom()
                 self.x=10
             else:
-                self.x=display[0]
+                self.x=game.room.roomSize[0]
         elif(self.x<0):
             if(game.room.links[3]):
                 game.room=game.room.links[3]
                 game.room.loadRoom()
-                self.x=display[0]-10
+                self.x=game.room.roomSize[0]-10
             else:
                 self.x=0
-        elif(self.y>display[1]):
+        elif(self.y>game.room.roomSize[1]):
             if(game.room.links[2]):
                 game.room=game.room.links[2]
                 game.room.loadRoom()
                 self.y=10
             else:
-                self.y=display[1]
+                self.y=game.room.roomSize[1]
         elif(self.y<0):
             if(game.room.links[0]):
                 game.room=game.room.links[0]
                 game.room.loadRoom()
-                self.y=display[1]-10
+                self.y=game.room.roomSize[1]-10
             else:
                 self.y=0
         for wall in game.room.walls:
@@ -407,29 +452,42 @@ class Player():
     def hurt(self):
         self.image = self.hurtImage
         self.hp-=1
+        self.invincibility = 30
         self.state = -1
         self.stateTimer = 0
         if self.iceBody:
             targets = game.findEnemies(self.x, self.y, self.radius*self.iceBody*2)
             for target in targets:
-                target.state = -2
+                target.freeze()
 
     def draw(self):
-
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
         #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange), 30)
 
         # SWIPE
         if self.state == 1:
-            if self.stateTimer == 10:
-                x = int(self.x+self.xdir*self.swipeRange)
-                y = int(self.y+self.ydir*self.swipeRange)
+            if self.stateTimer == 20:
+                x = int(pos[0]+self.xdir*self.swipeRange)
+                y = int(pos[1]+self.ydir*self.swipeRange)
                 blitRotate(gameDisplay, self.swipeImage, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
 
         # YOU
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y-8) - self.imageSize//2))
+        if random.random()<0.5 or not self.invincibility:
+            gameDisplay.blit(self.image, (pos[0] - self.imageSize//2, pos[1]-8 - self.imageSize//2))
         if self.iceBody:
-            gameDisplay.blit(IceShield.image, (int(self.x-4) - IceShield.imageSize//2, int(self.y-4) - IceShield.imageSize//2))
+            gameDisplay.blit(IceShield.image, (int(pos[0]-4) - IceShield.imageSize//2, int(pos[1]-4) - IceShield.imageSize//2))
+    def drawPlayerUI(self):
+        for i in range(self.hp):
+            pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
+        for i in range(len(self.shownItems)):
+            clss=list(self.shownItems.keys())[i]
+
+            gameDisplay.blit(clss.image,(50-clss.imageSize/2,100+35*i-clss.imageSize/2))
+            if(self.shownItems[clss]>1):
+                textsurface = myfont.render("x"+str(self.shownItems[clss]) , False, (0, 0, 0))
+                gameDisplay.blit(textsurface,(60,110+35*i))
+
 
 
 class Enemy():
@@ -442,14 +500,16 @@ class Enemy():
         self.state = 0 # -2 frozen, -1:hurt, 0:idle
         self.stateTimer = 0
         self.movementSpeed = 1
-
+    def freeze(self):
+        if(self.hp>0):
+            self.state=-2
     def update(self):
-        if(self.x>display[0]):
-            self.x=display[0]
+        if(self.x>game.room.roomSize[0]):
+            self.x=game.room.roomSize[0]
         elif(self.x<0):
             self.x=0
-        elif(self.y>display[1]):
-            self.y=display[1]
+        elif(self.y>game.room.roomSize[1]):
+            self.y=game.room.roomSize[1]
         elif(self.y<0):
             self.y=0
 
@@ -471,9 +531,10 @@ class Enemy():
             #self.image = self.idleImage
 
     def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         if self.state==-2:
-            gameDisplay.blit(self.frozenImage, (int(self.x) - 128//2, int(self.y) - 128//2))
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+            gameDisplay.blit(self.frozenImage, (int(pos[0]) - 128//2, int(pos[1]) - 128//2))
+        gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
 
 class Chest(Enemy):
@@ -505,7 +566,8 @@ class Chest(Enemy):
                     loot = random.choice(self.lootTable)
                     if loot:
                         game.room.items.append(loot(self.x,self.y))
-                    game.room.enemies.remove(self)
+
+                    game.remove(self,game.room.enemies)
                 else:
                     self.state = 0
                     self.image = self.idleImage
@@ -540,12 +602,12 @@ class Animus(Enemy):
         target = game.findPlayer(self.x, self.y, 16)
         if target:
             target.hurt()
-            game.room.enemies.remove(self)
+            game.remove(self,game.room.enemies)
 
     def hurt(self):
         self.hp-=1
         if self.hp<=0:
-            game.room.enemies.remove(self)
+            game.remove(self,game.room.enemies)
 class Pufferfish(Enemy):
 
     radius = 8
@@ -569,7 +631,7 @@ class Pufferfish(Enemy):
             self.stateTimer-=1 #här går den neråt
             if self.stateTimer<=0:
                 if self.hp<=0:
-                    game.room.enemies.remove(self)
+                    game.remove(self,game.room.enemies)
                 else:
                     self.state = 0
                     self.image = self.idleImage
@@ -622,7 +684,7 @@ class Robot(Enemy):
         self.hasClone = hasClone
         self.alone = False
         if hasClone:
-            self.clone = Robot(random.randint(100,display[0]-100),random.randint(100,display[1]-100), hasClone=False)
+            self.clone = Robot(random.randint(100,game.room.roomSize[0]-100),random.randint(100,game.room.roomSize[1]-100), hasClone=False)
             game.room.enemies.append(self.clone)
 
     def update(self):
@@ -641,7 +703,7 @@ class Robot(Enemy):
             self.stateTimer-=1
             if self.stateTimer<=0:
                 if self.hp<=0:
-                    game.room.enemies.remove(self)
+                    game.remove(self,game.room.enemies)
                     if self.hasClone:
                         self.clone.alone = True
                 else:
@@ -652,7 +714,7 @@ class Robot(Enemy):
             self.x += random.randint(-2,2)
             self.y += random.randint(-2,2)
             self.image = random.choice([self.idleImage, self.walkImage])
-            if self.hasClone:
+            if self.hasClone and self.clone.state==0:
                 randomPoint = random.random()
                 if game.findPlayer(self.x+10+(self.clone.x-self.x)*randomPoint, self.y+10+(self.clone.y-self.y)*randomPoint, 4):
                     game.player.hurt()
@@ -679,8 +741,10 @@ class Robot(Enemy):
         self.stateTimer = 20
 
     def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         if self.hasClone and self.state == 0 and self.clone.state == 0:
-            pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (self.x+10,self.y), (self.clone.x+10, self.clone.y), random.randint(1,8))
+            clonepos=(int((display[0]-game.room.roomSize[0])/2+self.clone.x),int((display[1]-game.room.roomSize[1])/2+self.clone.y))
+            pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (pos[0]+10,pos[1]), (clonepos[0]+10, clonepos[1]), random.randint(1,8))
         super(Robot, self).draw()
 class SkuggVarg(Enemy): 
     # "kolmården"
@@ -706,7 +770,7 @@ class SkuggVarg(Enemy):
             self.stateTimer-=1 #här går den neråt
             if self.stateTimer<=0:
                 if self.hp<=0:
-                    game.room.enemies.remove(self)
+                    game.remove(self,game.room.enemies)
                 else:
                     self.state = 0
                     self.image = self.idleImage
@@ -752,13 +816,13 @@ class Projectile():
         self.x+=self.xv
         self.y+=self.yv
 
-        if(self.x>display[0]):
+        if(self.x>game.room.roomSize[0]):
             self.edge()
             self.xv*=-1
         elif(self.x<0):
             self.edge()
             self.xv*=-1
-        elif(self.y>display[1]):
+        elif(self.y>game.room.roomSize[1]):
             self.edge()
             self.yv*=-1
         elif(self.y<0):
@@ -770,11 +834,12 @@ class Projectile():
 
     def edge(self):
         if self.bounces == 0:
-            game.room.projectiles.remove(self)
+            game.remove(self,game.room.projectiles)
         self.bounces-=1
 
     def draw(self):
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
 
 class Missile(Projectile):
 
@@ -788,7 +853,7 @@ class Missile(Projectile):
         # HIT PLAYER
         if game.findPlayer(self.x, self.y, self.radius):
             game.player.hurt()
-            game.room.projectiles.remove(self)
+            game.remove(self,game.room.projectiles)
 class Sapphire(Projectile):
 
     radius = 10
@@ -805,28 +870,54 @@ class Sapphire(Projectile):
         # HIT ENEMIES
         targets =  game.findEnemies(self.x, self.y, self.radius)
         for target in targets:
-            target.state=-2
+            target.freeze()
         if targets:
-            game.room.projectiles.remove(self)
+            game.remove(self,game.room.projectiles)
+class Ruby(Projectile):
+
+    radius = 10
+    imageSize = 64
+    image = loadTexture("player/ruby.png", imageSize)
+
+    def __init__(self, x, y, xv, yv):
+        super(Ruby, self).__init__(x,y,xv,yv)
+        self.bounces = game.player.projBounces
+
+    def update(self):
+        super(Ruby, self).update()
+
+        # HIT ENEMIES
+        targets =  game.findEnemies(self.x, self.y, self.radius)
+        for target in targets:
+            target.hurt()
+        if targets:
+            game.remove(self,game.room.projectiles)
 
 class Item():
 
     radius = 20
-
+    showItem=True
     def __init__(self, x, y):
         self.x = x
         self.y = y
         self.age=0
 
+
     def update(self):
         self.age+=1
         if self.age>20:
             if game.findPlayer(self.x,self.y, self.radius):
+                if(self.showItem):
+                    if (self.__class__ in game.player.shownItems):
+                        game.player.shownItems[self.__class__]+=1
+                    else:
+                        game.player.shownItems[self.__class__]=1
                 self.pickup()
-                game.room.items.remove(self)
+                game.remove(self,game.room.items)
 
     def draw(self):
-        gameDisplay.blit(self.image, (int(self.x) - self.imageSize//2, int(self.y) - self.imageSize//2))
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
 
 class Fruit(Item):
 
@@ -848,12 +939,12 @@ class Fan(Item):
     image = loadTexture("items/fan.png", imageSize)
 
     def pickup(self):
-        game.player.fanRoll+=3
+        game.player.fanRoll+=-3
 class Heart(Item):
 
     imageSize = 128
     image = loadTexture("items/heart.png", imageSize)
-
+    showItem=False
     def pickup(self):
         game.player.hp+=1
 class Icecrystal(Item):
@@ -863,6 +954,13 @@ class Icecrystal(Item):
 
     def pickup(self):
         game.player.icecrystal+=1
+class Crystal(Item):
+
+    imageSize = 64
+    image = loadTexture("items/crystal.png", imageSize)
+
+    def pickup(self):
+        game.player.crystal+=1        
 class Bouncer(Item):
     imageSize = 64
     image = loadTexture("items/bouncer.png", imageSize)
@@ -878,80 +976,80 @@ class IceShield(Item):
 class StairCase(Item):
     imageSize = 128
     image = loadTexture("items/staircase.png", imageSize)
-
+    showItem=False
     def pickup(self):
         game.enterFloor(Floor(roomPresets))
         game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer,IceShield]
+allItems=[Fruit,Stick,Fan,Heart,Icecrystal,Bouncer,IceShield,Crystal]
 roomPresets=[
     [[
-    createWallF(100,100,200,100),
-    createWallF(800,lambda :random.randint(1,600),lambda :random.randint(1,600),50),
+    createWallF(300,300,200,50),
+    createWallF(300,lambda :random.randint(1,200),lambda :random.randint(1,200),50),
     ],[
-    createF([Chest],100,100, lootTable=[None,Fruit]),
+    createF([Chest],100,100, lootTable=[None,Bouncer]),
     createF([Animus,Pufferfish,Robot],150,50),
-    createF([SkuggVarg],lambda :random.randint(0,1200),lambda :random.randint(0,700),occurance=0.5),
+    createF([SkuggVarg],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
     ],[
-    createF([Fruit],10,150),
-    createF(allItems,10,150),
-    createF(allItems+[None],200,400,occurance=0.5),
+    createF([Fruit],50,150,depth=5),
+    createF(allItems,40,150),
+    createF(allItems,200,400,occurance=0.5),
     ],], # Test Room using everything
 
     [[
-    createWallF(400,300,120,20,occurance=0.2),
-    createWallF(800,300,120,20,occurance=0.2),
-    createWallF(450,400,20,220,occurance=0.3),
-    createWallF(750,400,20,220,occurance=0.3),
-    createWallF(600,500,320,20,occurance=0.2),
-    createWallF(600,300,320,20,occurance=0.2),
+    createWallF(100,200,120,20,occurance=0.2),
+    createWallF(400,200,120,20,occurance=0.2),
+    createWallF(150,300,20,220,occurance=0.3),
+    createWallF(350,300,20,220,occurance=0.3),
+    createWallF(200,400,220,20,occurance=0.2),
+    createWallF(200,200,220,20,occurance=0.2),
     ],[
-    createF([Animus],600,350),
-    createF([Pufferfish],400,350,occurance=0.2),
-    createF([Pufferfish],800,350,occurance=0.2),
+    createF([Animus],250,250),
+    createF([Pufferfish],200,250,occurance=0.2),
+    createF([Pufferfish],300,250,occurance=0.2),
     ],[
-    createF([Fruit],600,450,occurance=0.5),
+    createF([Fruit],250,350,occurance=0.5),
     ],], # Test Room
     
     [[
-    createWallF(100,100,200,100),
-    createWallF(800,lambda :random.randint(1,600),150,50),
+    createWallF(100,150,50,100),
+    createWallF(300,lambda :random.randint(1,400),100,50),
     ],[
-    createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
+    createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     ],[
-    createF(allItems,600,500, occurance=0.1),
+    createF(allItems,300,200, occurance=0.1),
     ],], # Test Room
 
     [[
     ],[
-    createF([Robot],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
-    createF([Animus],lambda :random.randint(100,display[0]-100),lambda :random.randint(100,display[1]-100)),
-    createF([Pufferfish],600,350),
+    createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    createF([Animus],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    createF([Pufferfish],300,350),
     ],[
-    createF([Fruit],550,350, occurance=0.3),
-    createF([Stick],600,350, occurance=0.4),
-    createF([Fan],650,350, occurance=0.3),
+    createF([Fruit],200,300, occurance=0.3),
+    createF([Stick],250,300, occurance=0.4),
+    createF([Fan],300,300, occurance=0.3),
     ],], # Ellas Room
 
     [[
     ],[
-    createF([Chest],600,350),
-    createF([Animus,Pufferfish, SkuggVarg],500,300),
-    createF([Animus,Pufferfish, SkuggVarg],700,300),
-    createF([Animus,Pufferfish, SkuggVarg],600,250),
-    createF([Animus,Pufferfish, SkuggVarg],550,450),
-    createF([Animus,Pufferfish, SkuggVarg],650,450),
+    createF([Chest],250,250),
+    createF([Animus,Pufferfish, SkuggVarg],150,200),
+    createF([Animus,Pufferfish, SkuggVarg],350,200,depth=2),
+    createF([Animus,Pufferfish, SkuggVarg],250,150,depth=2),
+    createF([Animus,Pufferfish, SkuggVarg],200,350,depth=2),
+    createF([Animus,Pufferfish, SkuggVarg],300,350,depth=2),
     ],[
     #createF(allItems,600,350),
     ],], # Pentagon
 
     [[
-    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(20,1000),lambda :random.randint(20,500), occurance=0.5),
-    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(20,1000),lambda :random.randint(20,500), occurance=0.5),
+    createWallF(lambda :random.randint(100,400),lambda :random.randint(100,400),lambda :random.randint(20,100),lambda :random.randint(20,200), occurance=0.5),
+    createWallF(lambda :random.randint(100,400),lambda :random.randint(100,400),lambda :random.randint(20,200),lambda :random.randint(20,100), occurance=0.5),
     ],[
-    createF([Chest],600,350)
+    createF([Chest],250,250)
     ]+[
-    createF([Robot],lambda :random.randint(100,1100),lambda :random.randint(100,600), occurance=0.8),
+    createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.8),
     ]*5,
     [
     #createF(allItems,600,350),
@@ -960,28 +1058,28 @@ roomPresets=[
     [[
     ],[
     ],[
-    createF([Heart],lambda :random.randint(500,700),lambda :random.randint(300,400)),
+    createF([Heart],lambda :random.randint(200,300),lambda :random.randint(200,300)),
     ],], # Heal
 
     [[
-    createWallF(lambda :random.randint(200,1000),lambda :random.randint(200,500),lambda :random.randint(20,1000),lambda :random.randint(20,500), occurance=0.5),
-    createWallF(600,350,100,100, occurance=0.5),
+    createWallF(lambda :random.randint(200,300),lambda :random.randint(200,300),lambda :random.randint(20,100),lambda :random.randint(20,100), occurance=0.5),
+    createWallF(250,250,100,100, occurance=0.5),
     ],[
-    createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
-    createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500)),
-    createF([Animus],lambda :random.randint(200,1000),lambda :random.randint(200,500), occurance=0.8),
+    createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300)),
+    createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300)),
+    createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8),
     ],[
     ],], # Animals
 
     [[
-    createWallF(lambda :random.randint(1,11)*100,lambda :random.randint(1,6)*100,220,20),
-    ]*8+[
-    createWallF(lambda :random.randint(1,11)*100,lambda :random.randint(1,6)*100,20,220),
-    ]*8,[
-    createF([SkuggVarg],650,350),
-    createF([Chest],550,350, occurance=0.8),
+    createWallF(lambda :random.randint(1,4)*100,lambda :random.randint(0,4)*100+50,20,120),
+    ]*4+[
+    createWallF(lambda :random.randint(0,4)*100+50,lambda :random.randint(1,4)*100,120,20),
+    ]*4,[
+    createF([SkuggVarg],250,250),
+    createF([Chest],200,250, occurance=0.8),
     ],[
-    createF([Heart],750,350, occurance=0.5),
+    createF([Heart],300,250, occurance=0.5),
     ],], # Minotaur
 ]
 

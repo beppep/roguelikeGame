@@ -383,12 +383,14 @@ class Player():
                 targets = game.findEnemies(attackX, attackY, 30)
                 for target in targets:
                     target.hurt()
+                """
                 for i in range(self.icecrystal):
                     if random.random()<0.5:
                         game.room.projectiles.append(Sapphire(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
                 for i in range(self.crystal):
                     if random.random()<0.5:
                         game.room.projectiles.append(Ruby(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
+                """
             else:
                 self.image = self.attackImages[1]
 
@@ -500,9 +502,19 @@ class Enemy():
         self.state = 0 # -2 frozen, -1:hurt, 0:idle
         self.stateTimer = 0
         self.movementSpeed = 1
+    def die(self):
+        game.remove(self,game.room.enemies)
+        for i in range(game.player.crystal):
+            xv, yv = directionHash[random.randint(0,3)]
+            game.room.projectiles.append(Ruby(self.x, self.y, xv*3+random.random()-0.5, yv*3+random.random()-0.5))
+        for i in range(game.player.icecrystal):
+            a = random.random()*6.28
+            xv, yv = (math.cos(a),math.sin(a))
+            game.room.projectiles.append(Sapphire(self.x, self.y, xv*3+random.random()-0.5, yv*3+random.random()-0.5))
     def freeze(self):
         if(self.hp>0):
             self.state=-2
+            self.stateTimer = 60
     def update(self):
         if(self.x>game.room.roomSize[0]):
             self.x=game.room.roomSize[0]
@@ -518,6 +530,9 @@ class Enemy():
 
         if self.state == -2:
             self.image = self.idleImage
+            self.stateTimer-=1
+            if self.stateTimer <=0:
+                self.state = 0
 
     def basicMove(self):
         dx = (self.x<game.player.x)*2 -1
@@ -559,7 +574,6 @@ class Chest(Enemy):
         #HURT
         if self.state == -1:
             self.image = self.hurtImage
-
             self.stateTimer-=1 #här går den neråt
             if self.stateTimer<=0:
                 if self.hp<=0:
@@ -585,7 +599,7 @@ class Animus(Enemy):
     def __init__(self, x, y):
         super(Animus, self).__init__(x,y)
         self.image = self.idleImage
-        self.hp = 1
+        self.hp = 3
 
     def update(self):
         if self.state == 0:
@@ -607,7 +621,7 @@ class Animus(Enemy):
     def hurt(self):
         self.hp-=1
         if self.hp<=0:
-            game.remove(self,game.room.enemies)
+            self.die()
 class Pufferfish(Enemy):
 
     radius = 8
@@ -623,18 +637,6 @@ class Pufferfish(Enemy):
 
     def update(self):
         super(Pufferfish, self).update()
-
-        #HURT
-        if self.state == -1:
-            self.image = self.hurtImage
-
-            self.stateTimer-=1 #här går den neråt
-            if self.stateTimer<=0:
-                if self.hp<=0:
-                    game.remove(self,game.room.enemies)
-                else:
-                    self.state = 0
-                    self.image = self.idleImage
 
         #IDLE
         if self.state == 0:
@@ -666,8 +668,8 @@ class Pufferfish(Enemy):
 
     def hurt(self):
         self.hp-=1
-        self.state = -1
-        self.stateTimer = 20
+        if self.hp<=0:
+            self.die()
 class Robot(Enemy):
 
     radius = 20
@@ -677,51 +679,34 @@ class Robot(Enemy):
     hurtImage = loadTexture("enemies/robot/stunned.png", imageSize)
     fireImage = loadTexture("enemies/robot/fire.png", imageSize)
 
-    def __init__(self, x, y, hasClone=True):
+    def __init__(self, x, y, chief=True):
         super(Robot, self).__init__(x,y)
         self.image = self.idleImage
         self.hp = 3
-        self.hasClone = hasClone
-        self.alone = False
-        if hasClone:
-            self.clone = Robot(random.randint(100,game.room.roomSize[0]-100),random.randint(100,game.room.roomSize[1]-100), hasClone=False)
-            game.room.enemies.append(self.clone)
+        self.chief = chief
+        if chief:
+            self.friend = Robot(random.randint(100,game.room.roomSize[0]-100),random.randint(100,game.room.roomSize[1]-100), chief=False)
+            game.room.enemies.append(self.friend)
+            self.friend.friend = self
 
     def update(self):
 
         super(Robot, self).update()
-
-        if self.hasClone:
-            if self.clone.hp <= 0:
-                self.hasClone = False
-                self.alone = True
-
-        #HURT
-        if self.state == -1:
-            self.image = self.hurtImage
-
-            self.stateTimer-=1
-            if self.stateTimer<=0:
-                if self.hp<=0:
-                    game.remove(self,game.room.enemies)
-                    if self.hasClone:
-                        self.clone.alone = True
-                else:
-                    self.state = 0
 
         #IDLE
         if self.state == 0:
             self.x += random.randint(-2,2)
             self.y += random.randint(-2,2)
             self.image = random.choice([self.idleImage, self.walkImage])
-            if self.hasClone and self.clone.state==0:
-                randomPoint = random.random()
-                if game.findPlayer(self.x+10+(self.clone.x-self.x)*randomPoint, self.y+10+(self.clone.y-self.y)*randomPoint, 4):
-                    game.player.hurt()
-            if self.alone:
-                if random.random()<0.01:
-                    self.state = 1
-                    self.stateTimer = 0
+            if self.friend and self.friend.state==0:
+                #just beamin
+                if self.chief: #unnecessary
+                    randomPoint = random.random()
+                    if game.findPlayer(self.x+10+(self.friend.x-self.x)*randomPoint, self.y+10+(self.friend.y-self.y)*randomPoint, 4):
+                        game.player.hurt()
+            elif random.random()<0.01:
+                self.state = 1
+                self.stateTimer = 0
 
         # SHOOT
         if self.state == 1:
@@ -737,13 +722,15 @@ class Robot(Enemy):
 
     def hurt(self):
         self.hp-=1
-        self.state = -1
-        self.stateTimer = 20
+        if self.hp<=0:
+            self.die()
+            if self.friend:
+                self.friend.friend = None
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
-        if self.hasClone and self.state == 0 and self.clone.state == 0:
-            clonepos=(int((display[0]-game.room.roomSize[0])/2+self.clone.x),int((display[1]-game.room.roomSize[1])/2+self.clone.y))
+        if self.state == 0 and self.friend and self.friend.state == 0 and self.chief:
+            clonepos=(int((display[0]-game.room.roomSize[0])/2+self.friend.x),int((display[1]-game.room.roomSize[1])/2+self.friend.y))
             pygame.draw.line(gameDisplay, (200,200,200+random.random()*55), (pos[0]+10,pos[1]), (clonepos[0]+10, clonepos[1]), random.randint(1,8))
         super(Robot, self).draw()
 class SkuggVarg(Enemy): 
@@ -758,27 +745,16 @@ class SkuggVarg(Enemy):
     def __init__(self, x, y):
         super(SkuggVarg, self).__init__(x,y)
         self.image = self.idleImage
-        self.hp = 2
+        self.hp = 5
+        self.movementSpeed = 0.5
 
     def update(self):
         super(SkuggVarg, self).update()
 
-        #HURT
-        if self.state == -1:
-            self.image = self.hurtImage
-
-            self.stateTimer-=1 #här går den neråt
-            if self.stateTimer<=0:
-                if self.hp<=0:
-                    game.remove(self,game.room.enemies)
-                else:
-                    self.state = 0
-                    self.image = self.idleImage
-
         #IDLE
         if self.state == 0:
             self.basicMove()
-            if game.findPlayer(self.x, self.y, 16):
+            if game.findPlayer(self.x, self.y, 20):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -788,7 +764,7 @@ class SkuggVarg(Enemy):
                 self.image = self.attackImages[self.stateTimer//6]
             if self.stateTimer==24:
                 self.image = self.attackImages[4]
-                target = game.findPlayer(self.x, self.y, 16)
+                target = game.findPlayer(self.x, self.y, 24)
                 if target:
                     target.hurt()
             if self.stateTimer>30:
@@ -801,8 +777,8 @@ class SkuggVarg(Enemy):
 
     def hurt(self):
         self.hp-=1
-        self.state = -1
-        self.stateTimer = 20
+        if self.hp<=0:
+            self.die()
 
 class Projectile():
     def __init__(self, x, y, xv, yv):
@@ -1108,4 +1084,4 @@ while jump_out == False:
 pygame.quit()
 quit()
 
-#
+#ddddddddd

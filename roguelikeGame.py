@@ -70,7 +70,7 @@ def loadTexture(name, w,h=None, mirror=False):
     else:
         return image
 
-def createF(names,x,y,occurance=1, lootTable=None,depth=1):
+def createF(names,x,y,occurance=1, lootTable=None,depth=1,shop=False):
     def create():
         if(random.random()<occurance and depth<=game.depth):
             if(callable(x)):
@@ -81,7 +81,10 @@ def createF(names,x,y,occurance=1, lootTable=None,depth=1):
                 posY=y()
             else:
                 posY=y
-            thing = random.choice(names)(posX,posY)
+            if(shop):
+                thing = random.choice(names)(posX,posY,shopItem=True)
+            else:
+                thing = random.choice(names)(posX,posY)
             if lootTable:
                 thing.lootTable = lootTable
             return thing
@@ -130,6 +133,8 @@ class Floor():
             self.roomPosList.append(roomPos)
             if(i == numOfRooms-1):
                 room = Room([[],[],[createF([StairCase],250,250),]],roomPos) # Final room of floor
+            elif(i == numOfRooms-2):
+                room = Room([[],[],[createF(allItems,400,250,shop=True),createF(allItems,300,250,shop=True),createF(allItems,200,250,shop=True),createF([Heart],100,250,shop=True),],],roomPos)
             else:
                 room = Room(random.choice(presets),roomPos)
             #room = Room(presets[-1],roomPos)
@@ -322,6 +327,7 @@ class Player():
         self.invincibility = 0
         self.image = self.idleImage
 
+        self.coins = 0
         self.movementSpeed = 1
         self.rollSpeed = 4
         self.fanRoll = 0 #3?
@@ -435,7 +441,9 @@ class Player():
                 textsurface = myfont.render("x"+str(self.shownItems[clss]) , False, (0, 0, 0))
                 gameDisplay.blit(textsurface,(60,110+35*i))
         textsurface = myfont.render("floor: "+str(game.depth) , False, (0, 0, 0))
-        gameDisplay.blit(textsurface,(1100,150))
+        gameDisplay.blit(textsurface,(1050,200))
+        textsurface = myfont.render("coins: "+str(self.coins) , False, (0, 0, 0))
+        gameDisplay.blit(textsurface,(200,30))
 
 class Warrior(Player):
     imageSize = 128
@@ -526,7 +534,7 @@ class Ranger(Player):
     def __init__(self, x, y):
         super().__init__(x,y)
         self.ammo=2
-        self.movementSpeed=1.2
+        self.movementSpeed=1.5
     def update(self):
         super(Ranger, self).update()
 
@@ -594,6 +602,7 @@ class Enemy():
         self.burning = 0
     def die(self):
         game.remove(self,game.room.enemies)
+        game.room.items.append(Coin(self.x,self.y))
         for i in range(game.player.crystal):
             xv, yv = directionHash[random.randint(0,3)]
             game.room.projectiles.append(Ruby(game.player.x, game.player.y, xv*3+random.random()-0.5, yv*3+random.random()-0.5))
@@ -991,16 +1000,18 @@ class Item():
 
     radius = 20
     showItem=True
-    def __init__(self, x, y):
+    def __init__(self, x, y,shopItem=False):
         self.x = x
         self.y = y
         self.age=0
-
+        self.shopItem=shopItem
 
     def update(self):
         self.age+=1
-        if self.age>20:
+        if self.age>20 and (not self.shopItem or game.player.coins>=self.price):
             if game.findPlayer(self.x,self.y, self.radius):
+                if self.shopItem:
+                    game.player.coins-=self.price
                 if(self.showItem):
                     if (self.__class__ in game.player.shownItems):
                         game.player.shownItems[self.__class__]+=1
@@ -1012,62 +1023,75 @@ class Item():
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
+        if(self.shopItem):
+            textsurface = myfont.render(str(self.price)+" U€" , False, (0, 0, 0))
+            gameDisplay.blit(textsurface,(pos[0]-20,pos[1]+25))
 
-class Fruit(Item):
+class Coin(Item):
 
     imageSize = 128
+    image = loadTexture("items/coin.png", imageSize)
+    showItem = False
+    def pickup(self):
+        game.player.coins+=1
+class Fruit(Item):
+    price=10
+    imageSize = 128
     image = loadTexture("items/fruit.png", imageSize)
-
+    
     def pickup(self):
         game.player.movementSpeed+=0.5
 class Stick(Item):
-
+    price=8
     imageSize = 128
     image = loadTexture("items/stick.png", imageSize)
 
     def pickup(self):
         game.player.swipeRange+=20
 class Fan(Item):
-
+    price=9
     imageSize = 128
     image = loadTexture("items/fan.png", imageSize)
 
     def pickup(self):
         game.player.fanRoll+=3
 class Heart(Item):
-
+    price=5
     imageSize = 128
     image = loadTexture("items/heart.png", imageSize)
     showItem=False
     def pickup(self):
         game.player.hp+=1
 class Icecrystal(Item):
-
+    price=15
     imageSize = 64
     image = loadTexture("items/icecrystal.png", imageSize)
 
     def pickup(self):
         game.player.icecrystal+=3
 class Crystal(Item):
-
+    price=13
     imageSize = 64
     image = loadTexture("items/crystal.png", imageSize)
 
     def pickup(self):
         game.player.crystal+=1
 class Bouncer(Item):
+    price=11
     imageSize = 128
     image = loadTexture("items/bouncer.png", imageSize)
 
     def pickup(self):
         game.player.projBounces+=1
 class IceShield(Item):
+    price=9
     imageSize = 128
     image = loadTexture("items/iceShield.png", imageSize)
 
     def pickup(self):
         game.player.iceBody+=1
 class StairCase(Item):
+
     imageSize = 128
     image = loadTexture("items/staircase.png", imageSize)
     showItem=False
@@ -1075,6 +1099,7 @@ class StairCase(Item):
         game.enterFloor(Floor(roomPresets))
         game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup
 class ColdCore(Item):
+    price=16
     imageSize = 128
     image = loadTexture("items/coldcore.png", imageSize)
 
@@ -1082,6 +1107,7 @@ class ColdCore(Item):
         game.player.freezeDamage+=1
         game.player.freezeTime+=30
 class FireSword(Item):
+    price=17
     imageSize = 128
     image = loadTexture("items/firesword.png", imageSize)
 
@@ -1116,6 +1142,15 @@ roomPresets=[
     ],[
     createF([Fruit],250,350,occurance=0.3),
     ],], # Test Room
+
+    # [[
+    # ],[
+    # ],[
+    # createF(allItems,400,250,shop=True),
+    # createF(allItems,300,250,shop=True),
+    # createF(allItems,200,250,shop=True),
+    # createF([Heart],100,250,shop=True),
+    # ],], # Shop
     
     [[
     createWallF(100,150,50,100),

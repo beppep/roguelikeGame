@@ -28,13 +28,13 @@ def initSound():
     volume = 1
     pygame.font.init() # you have to call this at the start, 
                            # if you want to use this module.
-    pygame.mixer.init(buffer=64)
+    pygame.mixer.init(buffer=1024)
     #Player.gameSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "game.wav"))
     #Player.gameSound.set_volume(volume*0.5)
     
     pygame.mixer.music.load(os.path.join(filepath, "sounds/Age of War.wav")) #must be wav 16bit and stuff?
     pygame.mixer.music.set_volume(volume*0.1)
-    #pygame.mixer.music.play(-1)
+    pygame.mixer.music.play(-1)
 
 def blitRotate(surf,image, pos, originPos, angle):
 
@@ -116,7 +116,7 @@ def createWallF(x,y,w,h,occurance=1):
 class Floor():
     def __init__(self,presets):
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,200,50),],[createF([Chest],350,250),],[]],[0,0]) # first room is empty
+            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
@@ -249,7 +249,8 @@ class Game():
         for enemy in self.room.enemies:
             d = r+enemy.radius
             if (enemy.x-x)**2 + (enemy.y-y)**2 < d**2:
-                targets.append(enemy)
+                if not enemy.invincibility:
+                    targets.append(enemy)
         return targets
 
     def findProjectiles(self, x,y, r):
@@ -348,7 +349,7 @@ class Player():
         self.freezeTime=60
         self.attackDamage=1
         self.fireSword=0
-        self.magnet = 1
+        self.magnet = 0
 
         self.shownItems = {}
 
@@ -622,6 +623,7 @@ class Enemy():
         self.state = 0 # -2 frozen, -1:hurt, 0:idle
         self.stateTimer = 0
         self.movementSpeed = 1
+        self.invincibility= 0
         self.burning = 0
     def die(self):
         game.remove(self,game.room.enemies)
@@ -662,6 +664,8 @@ class Enemy():
         if(self.burning>0):
             self.hurt(0.02)
             self.burning-=1
+        if self.invincibility:
+            self.invincibility-=1
 
     def basicMove(self,spdMult=1,target=None):
         if target==None:
@@ -978,8 +982,6 @@ class Schmitt(Enemy):
                 #blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
                 pygame.draw.circle(gameDisplay, (200,200,200), (x,y), 64)
         super().draw()
-
-
 class Skull(Enemy):
 
     radius = 16
@@ -991,6 +993,7 @@ class Skull(Enemy):
         self.image = self.idleImage
         self.hp = 1
         self.movementSpeed = -1
+        self.invincibility = 30
 
     def update(self):
         if self.state == 0:

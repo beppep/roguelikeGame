@@ -29,10 +29,10 @@ class Sound():
     SOUND_PATH=os.path.join(filepath, "sounds")
     pygame.font.init() # you have to call this at the start, 
                            # if you want to use this module.
-    pygame.mixer.init(buffer=64) # important to change
+    pygame.mixer.init(buffer=4) # important to change?
     hitSounds=[]
     hitSounds.append(pygame.mixer.Sound(os.path.join(SOUND_PATH, "hit1.wav")))
-    hitSounds[0].set_volume(volume*0.2)
+    hitSounds[0].set_volume(volume*0.4)
 
     reloadSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "reload.wav"))
     reloadSound.set_volume(volume*0.2)
@@ -40,9 +40,12 @@ class Sound():
     shotSound.set_volume(volume*0.2)
     cashSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "cash.wav"))
     cashSound.set_volume(volume*0.2)
+    glassSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "glass.wav"))
+    glassSound.set_volume(volume*0.2)
     
     pygame.mixer.music.load(os.path.join(SOUND_PATH, "Age of War.wav")) #must be wav 16bit and stuff?
     pygame.mixer.music.set_volume(volume*0.1)
+    time.sleep(0.1)
     pygame.mixer.music.play(-1)
 
 def blitRotate(surf,image, pos, originPos, angle):
@@ -381,10 +384,9 @@ class Player():
         # HURT
         if self.state == -1:
             self.stateTimer+=1
-            if self.stateTimer>=10:
+            if self.stateTimer>=20:
                 if self.hp <= 0:
-                    global jump_out
-                    jump_out = True
+                    pass
                 else:
                     self.image = self.idleImage
                     self.state = 0
@@ -440,7 +442,7 @@ class Player():
     def hurt(self):
         self.image = self.hurtImage
         self.hp-=1
-        self.invincibility = 30
+        self.invincibility = 60
         self.state = -1
         self.stateTimer = 0
         if self.iceBody:
@@ -619,6 +621,11 @@ class Ranger(Player):
             elif self.stateTimer>=50:
                 self.state = 0
 
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        if random.random()<0.5 and self.ammo and self.state==0:
+            pygame.draw.line(gameDisplay, (255,0,0), pos,(pos[0]+self.xdir*500,pos[1]+self.ydir*500), 1)
+        super().draw()
 
 class Enemy():
 
@@ -639,7 +646,8 @@ class Enemy():
         game.remove(self,game.room.enemies)
         game.room.items.append(Coin(self.x,self.y))
         for i in range(game.player.crystal):
-            xv, yv = directionHash[random.randint(0,3)]
+            a = random.random()*6.28
+            xv, yv = (math.cos(a),math.sin(a))
             game.room.projectiles.append(Ruby(game.player.x, game.player.y, xv*3+random.random()-0.5, yv*3+random.random()-0.5))
         for i in range(game.player.icecrystal):
             a = random.random()*6.28
@@ -676,7 +684,9 @@ class Enemy():
             self.stateTimer-=1
             if self.stateTimer <=0:
                 self.state = 0
-                self.hurt(game.player.freezeDamage)
+                if game.player.freezeDamage:
+                    Sound.glassSound.play()
+                    self.hurt(game.player.freezeDamage)
         if(self.burning>0):
             self.hurt(0.02)
             self.burning-=1
@@ -715,6 +725,7 @@ class Enemy():
         self.hp-=damage
         if self.hp<=0:
             self.die()
+
 class Chest(Enemy):
 
     radius = 48
@@ -953,7 +964,7 @@ class Schmitt(Enemy):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 5
-        self.movementSpeed = 0.5
+        self.movementSpeed = 0.6
 
     def update(self):
         super().update()
@@ -967,6 +978,7 @@ class Schmitt(Enemy):
 
         #ATTACK
         if self.state == 1:
+            self.basicMove()
             self.stateTimer+=1
             if self.stateTimer==1:
                 self.image = self.attackImages[0]
@@ -1017,10 +1029,11 @@ class Skull(Enemy):
         self.movementSpeed+=0.01
 
         #ATTACK
-        target = game.findPlayer(self.x, self.y, 8)
-        if target:
-            target.hurt()
-            game.remove(self,game.room.enemies)
+        if not self.invincibility and self.state==0:
+            target = game.findPlayer(self.x, self.y, 8)
+            if target:
+                target.hurt()
+                game.remove(self,game.room.enemies)
 class Saw(Enemy):
 
     radius = 24
@@ -1103,12 +1116,12 @@ class Sledger(Enemy):
             self.ydir*=-1
 
     def update(self):
-        if self.hp<3:
-            self.basicMove(spdMult=-1)
-        else:
-            self.basicMove()
         if self.state == 0:
             self.image = self.idleImage
+            if game.findPlayer(self.x,self.y,100):
+                self.basicMove(spdMult=-1)
+            else:
+                self.basicMove()
 
         super().update()
 
@@ -1216,7 +1229,7 @@ class Ruby(Projectile):
         # HIT ENEMIES
         targets =  game.findEnemies(self.x, self.y, self.radius)
         for target in targets:
-            target.hurt()
+            target.fire(30)
         if targets:
             game.remove(self,game.room.projectiles)
 class Bullet(Projectile):
@@ -1537,4 +1550,4 @@ pygame.quit()
 quit()
 
 #ddddddddd         ddddddddd            aa  bssssss  
-#aasssddddddSSSSSSDDDDD
+#aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD

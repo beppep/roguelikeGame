@@ -24,15 +24,24 @@ myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
 
 
-def initSound():
+class Sound():
     volume = 1
+    SOUND_PATH=os.path.join(filepath, "sounds")
     pygame.font.init() # you have to call this at the start, 
                            # if you want to use this module.
-    pygame.mixer.init(buffer=1024)
-    #Player.gameSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "game.wav"))
-    #Player.gameSound.set_volume(volume*0.5)
+    pygame.mixer.init(buffer=64) # important to change
+    hitSounds=[]
+    hitSounds.append(pygame.mixer.Sound(os.path.join(SOUND_PATH, "hit1.wav")))
+    hitSounds[0].set_volume(volume*0.2)
+
+    reloadSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "reload.wav"))
+    reloadSound.set_volume(volume*0.2)
+    shotSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "shot.wav"))
+    shotSound.set_volume(volume*0.2)
+    cashSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "cash.wav"))
+    cashSound.set_volume(volume*0.2)
     
-    pygame.mixer.music.load(os.path.join(filepath, "sounds/Age of War.wav")) #must be wav 16bit and stuff?
+    pygame.mixer.music.load(os.path.join(SOUND_PATH, "Age of War.wav")) #must be wav 16bit and stuff?
     pygame.mixer.music.set_volume(volume*0.1)
     pygame.mixer.music.play(-1)
 
@@ -564,6 +573,7 @@ class Ranger(Player):
         if self.state == 1:
             if self.stateTimer==0:
                 if(self.ammo>0):
+                    Sound.shotSound.play()
                     self.image = self.attackImages[0]
                     game.room.projectiles.append(Bullet(self.x, self.y, self.xdir*8, self.ydir*8))
                     self.ammo-=1
@@ -582,6 +592,8 @@ class Ranger(Player):
         if self.state == 2:
             self.stateTimer+=1
             self.basicMove(0.1)
+            if self.stateTimer==1:
+                Sound.reloadSound.play()
             if self.stateTimer<10:
                 
                 self.image = self.attackImages[1]
@@ -698,6 +710,8 @@ class Enemy():
     def hurt(self,damage=None):
         if(damage==None):
             damage=game.player.attackDamage
+        if damage>0.3:
+            random.choice(Sound.hitSounds).play()
         self.hp-=damage
         if self.hp<=0:
             self.die()
@@ -1240,6 +1254,7 @@ class Item():
             if game.findPlayer(self.x,self.y, self.radius):
                 if self.shopItem:
                     game.player.coins-=self.price
+                    Sound.cashSound.play()
                 if(self.showItem):
                     if (self.__class__ in game.player.shownItems):
                         game.player.shownItems[self.__class__]+=1
@@ -1373,7 +1388,6 @@ roomPresets=[
     ],], # Test Room using everything
 
     [[
-    createWallF(100,200,120,20,occurance=0.2),
     createWallF(400,200,120,20,occurance=0.2),
     createWallF(150,300,20,220,occurance=0.3),
     createWallF(350,300,20,220,occurance=0.3),
@@ -1381,10 +1395,11 @@ roomPresets=[
     createWallF(250,200,220,20,occurance=0.2),
     ],[
     createF([Animus],250,250),
+    createF([Sledger,Schmitt],250,200,depth=3),
     createF([Pufferfish],200,250,occurance=0.2),
     createF([Pufferfish],300,250,occurance=0.2),
-    createF([Saw],300,350,occurance=0.5, depth=4),
-    createF([Saw],200,350,occurance=0.5, depth=4),
+    createF([Saw],300,350,occurance=0.3, depth=4),
+    createF([Saw],200,350,occurance=0.3, depth=4),
     ],[
     createF([Fruit],250,350,occurance=0.3),
     ],], # Test Room
@@ -1465,15 +1480,15 @@ roomPresets=[
     createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300)),
     createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300), depth=2),
     createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8),
-    createF([Sledger],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8, depth=3),
+    createF([Sledger],lambda :random.randint(200,300),lambda :random.randint(200,300), depth=3),
     createF([Sledger],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8, depth=5),
     ],[
     ],], # Animals
 
     [[
-    createWallF(lambda :random.randint(1,4)*100,lambda :random.randint(0,4)*100+50,20,120),
+    createWallF(lambda :random.randint(1,4)*100,lambda :random.randint(1,3)*100+50,20,120),
     ]*4+[
-    createWallF(lambda :random.randint(0,4)*100+50,lambda :random.randint(1,4)*100,120,20),
+    createWallF(lambda :random.randint(1,3)*100+50,lambda :random.randint(1,4)*100,120,20),
     ]*4,[
     createF([SkuggVarg,Sledger,Schmitt],200,250, depth=5),
     createF([SkuggVarg],250,250),
@@ -1502,8 +1517,6 @@ roomPresets=[
 gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
 pygame.display.set_caption("Roguelike Game")
 pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
-
-initSound()
 
 game = Game()
 game.enterFloor(Floor(roomPresets))

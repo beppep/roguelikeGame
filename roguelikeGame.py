@@ -116,12 +116,12 @@ def createWallF(x,y,w,h,occurance=1):
 class Floor():
     def __init__(self,presets):
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Saw],350,300),],[]],[0,0]) # first room is empty
+            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
-        numOfRooms=random.randint(5+game.depth,7+game.depth)
+        numOfRooms=random.randint(4+game.depth,6+game.depth)
         for i in range(numOfRooms):
             roomPos=[0,0]
             while roomPos in self.roomPosList:
@@ -312,6 +312,7 @@ class Wall():
                 else:
                     other.y-=dy
                     other.edge(verticalWall=False)
+                return True
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -555,7 +556,7 @@ class Ranger(Player):
         super().__init__(x,y)
         self.maxAmmo = 3
         self.ammo=self.maxAmmo
-        self.movementSpeed=2
+        self.movementSpeed=1.5 # 2?
     def update(self):
         super().update()
 
@@ -726,7 +727,10 @@ class Chest(Enemy):
                 if self.hp<=0:
                     loot = random.choice(self.lootTable)
                     if loot:
-                        game.room.items.append(loot(self.x,self.y))
+                        if issubclass(loot,Enemy):
+                            game.room.enemies.append(loot(self.x,self.y))
+                        else:
+                            game.room.items.append(loot(self.x,self.y))
 
                     game.remove(self,game.room.enemies)
                 else:
@@ -871,14 +875,10 @@ class Robot(Enemy):
             elif self.stateTimer>90:
                 self.state = 0
 
-    def hurt(self,damage=None):
-        if(damage==None):
-            damage=game.player.attackDamage
-        self.hp-=damage
-        if self.hp<=0:
-            self.die()
-            if self.friend:
-                self.friend.friend = None
+    def die(self):
+        super().die()
+        if self.friend:
+            self.friend.friend = None
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -1010,18 +1010,77 @@ class Skull(Enemy):
 class Saw(Enemy):
 
     radius = 24
+    spinRadius = 100
     imageSize = 128
     idleImage = loadTexture("enemies/sledger/saw1.png", imageSize)
     spinImage = loadTexture("enemies/sledger/saw2.png", imageSize)
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, friend=None):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 1
         self.movementSpeed = 3
-        a = random.random()*6.28
-        self.xdir = math.sin(a)
-        self.ydir = math.cos(a)
+        self.a = random.random()*6.28
+        self.xdir = math.cos(self.a)
+        self.ydir = math.sin(self.a)
+        self.friend = friend
+        if self.friend:
+            self.spindir = random.choice((1,-1))
+
+    def edge(self, verticalWall):
+        if self.friend:
+            self.spindir*=-1
+            self.a+=self.movementSpeed*self.spindir/self.spinRadius*3
+        else:
+            if verticalWall:
+                self.xdir*=-1
+            else:
+                self.ydir*=-1
+
+    def update(self):
+        r = self.spinRadius
+        if self.state == 0:
+            self.image = random.choice((self.idleImage, self.spinImage))
+            if self.friend:
+                self.a+=self.movementSpeed*self.spindir/r
+                self.xdir = -math.sin(self.a)*self.spindir
+                self.ydir = math.cos(self.a)*self.spindir
+            else:
+                self.x+=self.xdir*self.movementSpeed
+                self.y+=self.ydir*self.movementSpeed
+        if self.friend:
+            self.x=self.friend.x+math.cos(self.a)*r
+            self.y=self.friend.y+math.sin(self.a)*r
+
+
+        while True in [wall.adjust(self) for wall in game.room.walls]: 
+            self.a += 0.03
+
+        super().update()
+
+        #ATTACK
+        target = game.findPlayer(self.x, self.y, 24)
+        if target:
+            target.hurt()
+
+    def hurt(self,damage=None):
+        if self.friend:
+            self.spindir*=-1
+        else:
+            super().hurt(damage)
+class Sledger(Enemy):
+
+    radius = 24
+    imageSize = 128
+    idleImage = loadTexture("enemies/sledger/idle.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 3
+        self.movementSpeed = 0.5
+        self.friend = Saw(self.x+50,self.y,friend=self)
+        game.room.enemies.append(self.friend)
 
     def edge(self, verticalWall):
         if verticalWall:
@@ -1030,17 +1089,27 @@ class Saw(Enemy):
             self.ydir*=-1
 
     def update(self):
+        if self.hp<3:
+            self.basicMove(spdMult=-1)
+        else:
+            self.basicMove()
         if self.state == 0:
-            self.image = random.choice((self.idleImage, self.spinImage))
-            self.x+=self.xdir*self.movementSpeed
-            self.y+=self.ydir*self.movementSpeed
+            self.image = self.idleImage
 
         super().update()
 
-        #ATTACK
-        target = game.findPlayer(self.x, self.y, 24)
-        if target:
-            target.hurt()
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        if 1:
+            clonepos=(int((display[0]-game.room.roomSize[0])/2+self.friend.x),int((display[1]-game.room.roomSize[1])/2+self.friend.y))
+            pygame.draw.line(gameDisplay, (200,100,25), (pos[0],pos[1]), (clonepos[0], clonepos[1]), 8)
+        super().draw()
+
+
+    def die(self):
+        super().die()
+        if self.friend:
+            self.friend.friend = None
 
 class Projectile():
     def __init__(self, x, y, xv, yv):
@@ -1297,10 +1366,10 @@ roomPresets=[
     createF([Chest],100,100, lootTable=[None,Saw], occurance=0.5),
     createF([Animus,Pufferfish,Robot,Skull,Saw],150,50, depth=3),
     createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],150,50, depth=4),
-    createF([Animus,Pufferfish,Robot,Skull,Saw],150,50, depth=5),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Sledger],150,50, depth=5),
     createF([Robot],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
     ],[
-    createF(allItems,200,400,occurance=0.1),
+    createF(allItems,200,400,occurance=0.2),
     ],], # Test Room using everything
 
     [[
@@ -1334,6 +1403,7 @@ roomPresets=[
     createWallF(300,lambda :random.randint(1,400),100,50),
     ],[
     createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    createF([Sledger],lambda :random.randint(200,game.room.roomSize[0]-200),lambda :random.randint(200,game.room.roomSize[1]-200),depth=3),
     ],[
     createF(allItems,300,200, occurance=0.1, depth=3),
     ],], # Test Room
@@ -1343,6 +1413,7 @@ roomPresets=[
     createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     createF([Animus],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     createF([Pufferfish],300,350),
+    createF([Sledger],200,250, depth=4),
     ],[
     createF([Fruit],200,300, occurance=0.1),
     createF([Stick],250,300, occurance=0.2),
@@ -1352,7 +1423,7 @@ roomPresets=[
     [[
     ],[
     createF([Chest],250,250),
-    createF([Schmitt],250,250,depth=4),
+    createF([Schmitt,Sledger],250,250,depth=4),
     createF([Animus,Pufferfish, Skull],150,200),
     createF([Animus,Pufferfish, Skull],350,200),
     createF([Animus,Pufferfish, Skull],250,150,depth=2),
@@ -1368,6 +1439,7 @@ roomPresets=[
     ],[
     createF([Chest],250,250),
     createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), depth = 2),
+    createF([Saw],lambda :random.randint(100,400),lambda :random.randint(100,400), depth = 5),
     ]+[
     createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.5),
     ]*3,
@@ -1393,6 +1465,8 @@ roomPresets=[
     createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300)),
     createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300), depth=2),
     createF([Animus],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8),
+    createF([Sledger],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8, depth=3),
+    createF([Sledger],lambda :random.randint(200,300),lambda :random.randint(200,300), occurance=0.8, depth=5),
     ],[
     ],], # Animals
 
@@ -1401,9 +1475,9 @@ roomPresets=[
     ]*4+[
     createWallF(lambda :random.randint(0,4)*100+50,lambda :random.randint(1,4)*100,120,20),
     ]*4,[
-    createF([SkuggVarg],200,250, depth=5),
+    createF([SkuggVarg,Sledger,Schmitt],200,250, depth=5),
     createF([SkuggVarg],250,250),
-    createF([SkuggVarg],300,250, depth=5),
+    createF([SkuggVarg,Sledger,Schmitt],300,250, depth=5),
     createF([Chest],250,250, occurance=0.5),
     ],[
     createF([Heart],350,250, occurance=0.5),
@@ -1450,4 +1524,4 @@ pygame.quit()
 quit()
 
 #ddddddddd         ddddddddd            aa  bssssss  
-#aa
+#aasssddddddSSSSSSDDDDD

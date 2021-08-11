@@ -352,6 +352,7 @@ class Player():
         self.swipeRange = 20
         self.icecrystal = 0
         self.crystal = 0
+        self.mosscrystal = 0
         self.projBounces = 0
         self.iceBody = 0
         self.freezeDamage=0
@@ -462,12 +463,12 @@ class Player():
     def drawPlayerUI(self):
         #hp
         for i in range(self.hp):
-            pygame.draw.rect(gameDisplay, (200,0,0),(50+20*i,30,16,16),0)
+            gameDisplay.blit(Heart.image,(30-Heart.imageSize//2+20*i,30-Heart.imageSize//2))
         #items
         for i in range(len(self.shownItems)):
             clss=list(self.shownItems.keys())[i]
 
-            gameDisplay.blit(clss.image,(50-clss.imageSize/2,100+35*i-clss.imageSize/2))
+            gameDisplay.blit(clss.image,(50-clss.imageSize/2,100+50*i-clss.imageSize/2))
             if(self.shownItems[clss]>1):
                 textsurface = myfont.render("x"+str(self.shownItems[clss]) , False, (0, 0, 0))
                 gameDisplay.blit(textsurface,(60,110+35*i))
@@ -537,7 +538,7 @@ class Warrior(Player):
 
             elif self.stateTimer==20:
                 self.image = self.rollImages[0]
-            elif self.stateTimer>=40:
+            elif self.stateTimer>=30:
                 self.state = 0
 
     def draw(self):
@@ -656,9 +657,9 @@ class Enemy():
     def freeze(self):
         if(self.hp>0):
             self.state=-2
-            self.stateTimer = game.player.freezeTime
+            self.stateTimer = max(self.stateTimer, game.player.freezeTime)
     def fire(self,duration):
-        self.burning=duration
+        self.burning = max(self.burning, duration)
     def edge(self, verticalWall):
         pass
     def update(self):
@@ -964,7 +965,7 @@ class Schmitt(Enemy):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 5
-        self.movementSpeed = 0.6
+        self.movementSpeed = 1
 
     def update(self):
         super().update()
@@ -1137,6 +1138,54 @@ class Sledger(Enemy):
         super().die()
         if self.friend:
             self.friend.friend = None
+class Svamp(Enemy):
+
+    radius = 32
+    imageSize = 128
+    idleImage = loadTexture("enemies/svamp/svamp.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 2
+
+    def update(self):
+
+        super().update()
+
+        #IDLE
+        if self.state == 0:
+            self.image = self.idleImage
+            if random.random()<0.02:
+                self.state = 1
+                self.stateTimer = 0
+
+        # SHOOT
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer==1:
+                a = random.random()*6.28
+                dx = math.cos(a)
+                dy = math.sin(a)
+                game.room.projectiles.append(Spore(self.x, self.y, dx, dy, self))
+            elif self.stateTimer>30:
+                self.state = 0
+class Hjuldjurplant(Enemy):
+
+    radius = 32
+    imageSize = 128
+    idleImage = loadTexture("enemies/hjuldjur/hjuldjurplant.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 2
+
+    def update(self):
+        super().update()
+
+        # IDLE
+
 
 class Projectile():
     def __init__(self, x, y, xv, yv):
@@ -1193,6 +1242,9 @@ class Missile(Projectile):
     imageSize = 64
     image = loadTexture("enemies/robot/proj.png", imageSize)
 
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.a = math.atan2(-self.yv,-self.xv)
     def update(self):
         super().update()
 
@@ -1200,12 +1252,17 @@ class Missile(Projectile):
         if game.findPlayer(self.x, self.y, self.radius):
             game.player.hurt()
             game.remove(self,game.room.projectiles)
+
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2,self.imageSize//2), self.a)#slow
+
 class Sapphire(Projectile):
 
     evil = False
     radius = 10
     imageSize = 64
-    image = loadTexture("player/sapphire.png", imageSize)
+    image = loadTexture("projectiles/sapphire.png", imageSize)
 
     def update(self):
         super().update()
@@ -1221,7 +1278,7 @@ class Ruby(Projectile):
     evil = False
     radius = 10
     imageSize = 64
-    image = loadTexture("player/ruby.png", imageSize)
+    image = loadTexture("projectiles/ruby.png", imageSize)
 
     def update(self):
         super().update()
@@ -1230,6 +1287,22 @@ class Ruby(Projectile):
         targets =  game.findEnemies(self.x, self.y, self.radius)
         for target in targets:
             target.fire(30)
+        if targets:
+            game.remove(self,game.room.projectiles)
+class Emerald(Projectile):
+
+    evil = False
+    radius = 10
+    imageSize = 64
+    image = loadTexture("projectiles/emerald.png", imageSize)
+
+    def update(self):
+        super().update()
+
+        # HIT ENEMIES
+        targets =  game.findEnemies(self.x, self.y, self.radius)
+        for target in targets:
+            pass
         if targets:
             game.remove(self,game.room.projectiles)
 class Bullet(Projectile):
@@ -1249,6 +1322,34 @@ class Bullet(Projectile):
             if game.player.fireSword:
                 target.fire(game.player.fireSword*30)
         if targets:
+            game.remove(self,game.room.projectiles)
+class Spore(Projectile):
+
+    evil = True
+    radius = 8
+    imageSize = 128
+    image = loadTexture("enemies/svamp/spore.png", imageSize)
+    puffImage = loadTexture("enemies/svamp/sporepuff.png", imageSize)
+
+    def __init__(self, x, y, xv, yv, owner):
+        super().__init__(x,y,xv,yv)
+        self.age = 0
+        self.owner= owner
+
+    def update(self):
+        super().update()
+
+        self.age+=1
+
+        if self.age == 110:
+            self.xv=0
+            self.yv=0
+            self.image = self.puffImage
+            if game.findPlayer(self.x, self.y, 24):
+                game.player.hurt()
+        if self.age == 120:
+            self.owner.x = self.x
+            self.owner.y = self.y
             game.remove(self,game.room.projectiles)
 
 class Item():
@@ -1284,7 +1385,6 @@ class Item():
             gameDisplay.blit(textsurface,(pos[0]-20,pos[1]+25))
 
 class StairCase(Item):
-
     imageSize = 128
     image = loadTexture("items/staircase.png", imageSize)
     showItem=False
@@ -1318,14 +1418,14 @@ class Stick(Item):
     image = loadTexture("items/stick.png", imageSize)
 
     def pickup(self):
-        game.player.swipeRange+=20
+        game.player.swipeRange+=30
 class Fan(Item):
-    price=7
+    price=6
     imageSize = 128
     image = loadTexture("items/fan.png", imageSize)
 
     def pickup(self):
-        game.player.fanRoll+=3
+        game.player.fanRoll+=2
 class Heart(Item):
     price=5
     imageSize = 128
@@ -1346,7 +1446,14 @@ class Crystal(Item):
     image = loadTexture("items/crystal.png", imageSize)
 
     def pickup(self):
-        game.player.crystal+=1
+        game.player.crystal+=3
+class Mosscrystal(Item):
+    price=16
+    imageSize = 64
+    image = loadTexture("items/mosscrystal.png", imageSize)
+
+    def pickup(self):
+        game.player.mosscrystal+=3
 class Bouncer(Item):
     price=9
     imageSize = 128
@@ -1360,7 +1467,7 @@ class IceShield(Item):
     image = loadTexture("items/iceShield.png", imageSize)
 
     def pickup(self):
-        game.player.iceBody+=1
+        game.player.iceBody+=2
 class ColdCore(Item):
     price=16
     imageSize = 128
@@ -1391,11 +1498,11 @@ roomPresets=[
     createWallF(300,300,200,50),
     createWallF(300,lambda :random.randint(100,200),lambda :random.randint(1,200),50),
     ],[
-    createF([Chest],100,100, lootTable=[None,Saw], occurance=0.5),
-    createF([Animus,Pufferfish,Robot,Skull,Saw],150,50, depth=3),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],150,50, depth=4),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Sledger],150,50, depth=5),
-    createF([Robot],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
+    createF([Chest],100,100, lootTable=[None,Saw,Svamp], occurance=0.5),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Svamp],150,50),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Sledger],150,50, depth=3),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],150,50, depth=5),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Svamp],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
     ],[
     createF(allItems,200,400,occurance=0.2),
     ],], # Test Room using everything
@@ -1411,8 +1518,8 @@ roomPresets=[
     createF([Sledger,Schmitt],250,200,depth=3),
     createF([Pufferfish],200,250,occurance=0.2),
     createF([Pufferfish],300,250,occurance=0.2),
-    createF([Saw],300,350,occurance=0.3, depth=4),
-    createF([Saw],200,350,occurance=0.3, depth=4),
+    createF([Saw,Svamp],300,350,occurance=0.3, depth=4),
+    createF([Saw,Svamp],200,350,occurance=0.3, depth=4),
     ],[
     createF([Fruit],250,350,occurance=0.3),
     ],], # Test Room
@@ -1431,6 +1538,7 @@ roomPresets=[
     createWallF(300,lambda :random.randint(1,400),100,50),
     ],[
     createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     createF([Sledger],lambda :random.randint(200,game.room.roomSize[0]-200),lambda :random.randint(200,game.room.roomSize[1]-200),depth=3),
     ],[
     createF(allItems,300,200, occurance=0.1, depth=3),
@@ -1438,7 +1546,7 @@ roomPresets=[
 
     [[
     ],[
-    createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
     createF([Animus],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     createF([Pufferfish],300,350),
     createF([Sledger],200,250, depth=4),
@@ -1509,6 +1617,7 @@ roomPresets=[
     createF([Chest],250,250, occurance=0.5),
     ],[
     createF([Heart],350,250, occurance=0.5),
+    createF([Coin],350,300, occurance=0.9),
     ],], # Minotaur
 
     [[
@@ -1517,13 +1626,25 @@ roomPresets=[
     createWallF(250,300,120,20),
     createWallF(250,200,120,20),
     ],[
-    createF([Robot],250,250),
+    createF([Robot],400,250),
     createF([Schmitt],50,50, depth=3),
     createF([Schmitt],50,450, depth=5),
     createF([Schmitt],450,50, depth=5),
     createF([Schmitt],450,450, depth=3),
     ],[
     ],], # Schmitts' housing
+
+    [[
+    ],[
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=3),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=4),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=5),
+    ],[
+    createF([Coin],250,250),
+    ],], # Fungii
+
 ]
 
 

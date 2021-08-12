@@ -140,19 +140,19 @@ class Floor():
                 connectedRoom = random.choice(self.rooms)
                 while not None in connectedRoom.links:
                     connectedRoom = random.choice(self.rooms)
-                connectionDirection = random.choice([i for i in range(4) if connectedRoom.links[i]==None ])
+                connectionDirection = random.choice([i for i in range(4) if connectedRoom.links[i]==None])
                 roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers
             self.roomPosList.append(roomPos)
             if(i == numOfRooms-1):
                 room = Room([[],[],[createF([StairCase],250,250),]],roomPos) # Final room of floor
             elif(i == numOfRooms-2):
-                room = Room([[],[],[createF(allItems,400,250,shop=True),createF(allItems,300,250,shop=True),createF(allItems,200,250,shop=True),createF([Heart],100,250,shop=True),],],roomPos)
+                room = Room([[],[createF([Statue],250,150)],[createF(allItems,400,250,shop=True),createF(allItems,300,250,shop=True),createF(allItems,200,250,shop=True),createF([Heart],100,250,shop=True),],],roomPos)
             else:
                 room = Room(random.choice(presets),roomPos)
-            #room = Room(presets[-1],roomPos)
             self.rooms.append(room)
             connectedRoom.links[connectionDirection]=room
             room.links[(connectionDirection+2)%4]=connectedRoom
+
     def drawMinimap(self):
         for room in self.rooms:
             pos=room.floorPos
@@ -293,7 +293,7 @@ class Game():
         pygame.draw.rect(gameDisplay, (110,110,100), (0,(display[1]+game.room.roomSize[1])/2,display[0],(display[1]-game.room.roomSize[1])/2))
         self.player.drawPlayerUI()
         self.floor.drawMinimap()
-
+ 
 
 class Wall():
 
@@ -426,14 +426,18 @@ class Player():
             wall.adjust(self)
 
     def basicMove(self, spdMult=1):
+        speed = self.movementSpeed
+        if not game.room.enemies:
+            speed = max(2.2, speed) #speed in empty rooms
+            
         pressed = pygame.key.get_pressed()
         dx = (pressed[pygame.K_d] or pressed[pygame.K_RIGHT]) - (pressed[pygame.K_a] or pressed[pygame.K_LEFT])
         dy = (pressed[pygame.K_s] or pressed[pygame.K_DOWN]) - (pressed[pygame.K_w] or pressed[pygame.K_UP])
         if dx or dy:
             if dx and dy:
                 dx, dy = dx*0.707, dy*0.707
-            self.x += dx*self.movementSpeed*spdMult
-            self.y += dy*self.movementSpeed*spdMult
+            self.x += dx*speed*spdMult
+            self.y += dy*speed*spdMult
             self.xdir = dx
             self.ydir = dy
             self.image = random.choice(self.walkImages+[self.idleImage])
@@ -643,9 +647,11 @@ class Enemy():
         self.movementSpeed = 1
         self.invincibility= 0
         self.burning = 0
+        self.coins = 1
     def die(self):
         game.remove(self,game.room.enemies)
-        game.room.items.append(Coin(self.x,self.y))
+        for i in range(self.coins):
+            game.room.items.append(Coin(self.x+random.randint(-8,8),self.y+random.randint(-8,8)))
         for i in range(game.player.crystal):
             a = random.random()*6.28
             xv, yv = (math.cos(a),math.sin(a))
@@ -795,10 +801,11 @@ class Animus(Enemy):
          #   game.room.enemies.append(Animus(self.x,self.y))
 
         #ATTACK
-        target = game.findPlayer(self.x, self.y, 16)
-        if target:
-            target.hurt()
-            game.remove(self,game.room.enemies)
+        if self.state == 0:
+            target = game.findPlayer(self.x, self.y, 16)
+            if target:
+                target.hurt()
+                game.remove(self,game.room.enemies)
 class Pufferfish(Enemy):
 
     radius = 8
@@ -925,6 +932,7 @@ class SkuggVarg(Enemy):
         super(SkuggVarg, self).__init__(x,y)
         self.image = self.idleImage
         self.hp = 5
+        self.coins = 2
         self.movementSpeed = 0.5
 
     def update(self):
@@ -966,6 +974,7 @@ class Schmitt(Enemy):
         self.image = self.idleImage
         self.hp = 5
         self.movementSpeed = 1
+        self.coins = 2
 
     def update(self):
         super().update()
@@ -1106,6 +1115,7 @@ class Sledger(Enemy):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 3
+        self.coins = 2
         self.movementSpeed = 0.5
         self.friend = Saw(self.x+50,self.y,friend=self)
         game.room.enemies.append(self.friend)
@@ -1172,20 +1182,136 @@ class Svamp(Enemy):
                 self.state = 0
 class Hjuldjurplant(Enemy):
 
-    radius = 32
-    imageSize = 128
+    radius = 24
+    imageSize = 64
     idleImage = loadTexture("enemies/hjuldjur/hjuldjurplant.png", imageSize)
 
     def __init__(self, x, y):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 2
+        self.coins = 0
 
     def update(self):
         super().update()
 
         # IDLE
 
+    def die(self):
+        super().die()
+        game.room.enemies.append(Hjuldjur(self.x,self.y-8))
+class Hjuldjur(Enemy):
+    radius = 16
+    imageSize = 64
+    idleImage = loadTexture("enemies/hjuldjur/hjuldjur.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 3
+        self.movementSpeed=2.5
+        self.invincibility = 30
+
+    def update(self):
+        if self.state==0:
+            if self.hp<=1:
+                self.basicMove(spdMult=-1)
+            elif self.invincibility:
+                self.basicMove(spdMult=-0.5)
+            else:
+                self.basicMove()
+            self.x += random.randint(-1,1)
+            self.y += random.randint(-1,1)
+
+        super().update()
+
+        #ATTACK
+        if not self.invincibility and self.state==0:
+            target = game.findPlayer(self.x, self.y, 16)
+            if target:
+                target.hurt()
+                game.remove(self,game.room.enemies)
+                game.room.enemies.append(Hjuldjurplant(self.x,self.y))
+class Statue(Enemy):
+    radius = 24
+    imageSize = 128
+    idleImage = loadTexture("enemies/rockgolem.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 8
+        self.coins = 0
+
+    def update(self):
+        super().update()
+
+        # IDLE
+
+    def die(self):
+        super().die()
+        for i in range(5):
+            game.room.enemies.append(Saw(self.x,self.y))
+class Mercenary(Enemy):
+    #mediocre name
+    radius = 24
+    imageSize = 128
+    idleImage = loadTexture("player/warrior/player.png", imageSize)
+    walkImages = [loadTexture("player/warrior/walk1.png", imageSize), loadTexture("player/warrior/walk2.png", imageSize)]
+    attackImages = [loadTexture("player/warrior/strike1.png", imageSize), loadTexture("player/warrior/strike2.png", imageSize)]
+    rollImages = [loadTexture("player/warrior/roll1.png", imageSize), loadTexture("player/warrior/roll2.png", imageSize)]
+
+    swipeImage = loadTexture("player/warrior/swipe.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 3
+        self.movementSpeed = 1.5
+        self.coins = 0
+
+    def update(self):
+        super().update()
+
+        #IDLE
+        if self.state == 0:
+            self.image = random.choice([self.idleImage]+self.walkImages)
+            self.basicMove()
+            if game.player.state==1:
+                self.state = 2
+                self.stateTimer = 0
+            if game.findPlayer(self.x, self.y, 32):
+                self.state = 1
+                self.stateTimer = 0
+
+        # ATAKK
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer<15:
+                self.image = self.attackImages[0]
+            elif self.stateTimer == 15:
+                self.image = self.attackImages[1]
+                if game.findPlayer(self.x, self.y, 30):
+                    game.player.hurt()
+            elif self.stateTimer>=25:
+                self.state = 0
+
+        # ROLL
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer<20:
+                self.invincibility=1
+                self.image = random.choice(self.rollImages)
+                self.x+=self.xdir*4
+                self.y+=self.ydir*4
+            elif self.stateTimer==20:
+                self.image = self.rollImages[0]
+            elif self.stateTimer>=30:
+                self.state = 0
+
+    def die(self):
+        super().die()
+        game.room.enemies.append(Chest(self.x,self.y))
 
 class Projectile():
     def __init__(self, x, y, xv, yv):
@@ -1390,6 +1516,8 @@ class StairCase(Item):
     showItem=False
     def pickup(self):
         game.enterFloor(Floor(roomPresets))
+        game.player.x = self.x
+        game.player.y = self.y
         game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup 
 class Coin(Item):
 
@@ -1499,10 +1627,10 @@ roomPresets=[
     createWallF(300,lambda :random.randint(100,200),lambda :random.randint(1,200),50),
     ],[
     createF([Chest],100,100, lootTable=[None,Saw,Svamp], occurance=0.5),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Svamp],150,50),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Sledger],150,50, depth=3),
+    createF([Animus,Pufferfish,Skull,Saw,Svamp],150,50),
+    createF([Animus,Pufferfish,Skull,Saw,Sledger],150,50, depth=3),
     createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],150,50, depth=5),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Svamp],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Hjuldjur],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
     ],[
     createF(allItems,200,400,occurance=0.2),
     ],], # Test Room using everything
@@ -1518,8 +1646,8 @@ roomPresets=[
     createF([Sledger,Schmitt],250,200,depth=3),
     createF([Pufferfish],200,250,occurance=0.2),
     createF([Pufferfish],300,250,occurance=0.2),
-    createF([Saw,Svamp],300,350,occurance=0.3, depth=4),
-    createF([Saw,Svamp],200,350,occurance=0.3, depth=4),
+    createF([Hjuldjurplant,Svamp],300,350,occurance=0.3, depth=4),
+    createF([Hjuldjurplant,Svamp],200,350,occurance=0.3, depth=4),
     ],[
     createF([Fruit],250,350,occurance=0.3),
     ],], # Test Room
@@ -1587,9 +1715,9 @@ roomPresets=[
     ],[
     createF([Skull],250,250,occurance=0.5),
     createF([Saw],50,50, depth=2),
-    createF([Saw],50,450, depth=3),
+    createF([Saw],50,450, depth=4),
     createF([Saw],450,50, depth=4),
-    createF([Saw],450,450, depth=4),
+    createF([Saw],450,450, depth=3),
     ],[
     createF([Heart],lambda :random.randint(200,300),lambda :random.randint(200,300)),
     ],], # Heal
@@ -1611,7 +1739,7 @@ roomPresets=[
     ]*4+[
     createWallF(lambda :random.randint(1,3)*100+50,lambda :random.randint(1,4)*100,120,20),
     ]*4,[
-    createF([SkuggVarg,Sledger,Schmitt],200,250, depth=5),
+    createF([SkuggVarg,Sledger,Schmitt],200,250, depth=4),
     createF([SkuggVarg],250,250),
     createF([SkuggVarg,Sledger,Schmitt],300,250, depth=5),
     createF([Chest],250,250, occurance=0.5),
@@ -1632,11 +1760,13 @@ roomPresets=[
     createF([Schmitt],450,50, depth=5),
     createF([Schmitt],450,450, depth=3),
     ],[
+    createF(allItems,250,250,shop=True),
     ],], # Schmitts' housing
 
     [[
     ],[
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
+    ]*2+[
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=3),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=4),
@@ -1644,6 +1774,32 @@ roomPresets=[
     ],[
     createF([Coin],250,250),
     ],], # Fungii
+
+    [[
+    createWallF(200,140,400,40),
+    createWallF(300,360,400,40),
+    createWallF(120,300,40,140, occurance=0.5),
+    createWallF(380,200,40,140, occurance=0.5),
+    ],[
+    createF([Hjuldjurplant],140,70),
+    createF([Hjuldjur],lambda :random.randint(100,game.room.roomSize[0]-100),70, depth=2, occurance=0.5),
+    createF([Schmitt, Sledger, SkuggVarg],250,250, depth = 4),
+    createF([Hjuldjur],lambda :random.randint(100,game.room.roomSize[0]-100),430, depth=2, occurance=0.5),
+    createF([Hjuldjurplant],360,430),
+    ],[
+    createF([Coin],70,70),
+    createF([Coin],430,430),
+    ],], # Plants
+
+    [[
+    ],[
+    createF([Statue],80,80, occurance=0.5),
+    createF([Statue],420,80, occurance=0.5),
+    createF([Statue],80,420, occurance=0.5),
+    createF([Statue],420,420, occurance=0.5),
+    createF([Mercenary],250,250, depth = 3),
+    ],[
+    ],], # Duel
 
 ]
 

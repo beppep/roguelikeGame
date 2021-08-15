@@ -29,7 +29,7 @@ class Sound():
     SOUND_PATH=os.path.join(filepath, "sounds")
     pygame.font.init() # you have to call this at the start, 
                            # if you want to use this module.
-    pygame.mixer.init(buffer=4) # important to change?
+    pygame.mixer.init(buffer=256) # important to change?
     hitSounds=[]
     hitSounds.append(pygame.mixer.Sound(os.path.join(SOUND_PATH, "hit1.wav")))
     hitSounds[0].set_volume(volume*0.4)
@@ -344,6 +344,7 @@ class Player():
         self.stateTimer = 0
         self.invincibility = 0
         self.image = self.idleImage
+        self.imageDir = 1
 
         self.coins = 0
         self.movementSpeed = 1.5
@@ -434,6 +435,8 @@ class Player():
         dx = (pressed[pygame.K_d] or pressed[pygame.K_RIGHT]) - (pressed[pygame.K_a] or pressed[pygame.K_LEFT])
         dy = (pressed[pygame.K_s] or pressed[pygame.K_DOWN]) - (pressed[pygame.K_w] or pressed[pygame.K_UP])
         if dx or dy:
+            if dx:
+                self.imageDir = (dx+1)//2
             if dx and dy:
                 dx, dy = dx*0.707, dy*0.707
             self.x += dx*speed*spdMult
@@ -461,7 +464,7 @@ class Player():
         
         # YOU
         if self.stateTimer%2==0 or not self.invincibility:
-            gameDisplay.blit(self.image, (pos[0] - self.imageSize//2, pos[1]-8 - self.imageSize//2))
+            gameDisplay.blit(self.image[self.imageDir], (pos[0] - self.imageSize//2, pos[1]-8 - self.imageSize//2))
         if self.iceBody:
             gameDisplay.blit(IceShield.image, (int(pos[0]-4) - IceShield.imageSize//2, int(pos[1]-4) - IceShield.imageSize//2))
     def drawPlayerUI(self):
@@ -484,11 +487,11 @@ class Player():
 
 class Warrior(Player):
     imageSize = 128
-    idleImage = loadTexture("player/warrior/player.png", imageSize)
-    hurtImage = loadTexture("player/warrior/hurt.png", imageSize)
-    walkImages = [loadTexture("player/warrior/walk1.png", imageSize), loadTexture("player/warrior/walk2.png", imageSize)]
-    attackImages = [loadTexture("player/warrior/strike1.png", imageSize), loadTexture("player/warrior/strike2.png", imageSize)]
-    rollImages = [loadTexture("player/warrior/roll1.png", imageSize), loadTexture("player/warrior/roll2.png", imageSize)]
+    idleImage = loadTexture("player/warrior/player.png", imageSize, mirror=True)
+    hurtImage = loadTexture("player/warrior/hurt.png", imageSize, mirror=True)
+    walkImages = [loadTexture("player/warrior/walk1.png", imageSize, mirror=True), loadTexture("player/warrior/walk2.png", imageSize, mirror=True)]
+    attackImages = [loadTexture("player/warrior/strike1.png", imageSize, mirror=True), loadTexture("player/warrior/strike2.png", imageSize, mirror=True)]
+    rollImages = [loadTexture("player/warrior/roll1.png", imageSize, mirror=True), loadTexture("player/warrior/roll2.png", imageSize, mirror=True)]
 
     swipeImage = loadTexture("player/warrior/swipe.png", imageSize)
     fireSwipeImage = loadTexture("player/warrior/fireswipe.png", imageSize)
@@ -563,16 +566,16 @@ class Warrior(Player):
 class Ranger(Player):
     radius = 16
     imageSize = 128
-    idleImage = loadTexture("player/ranger/idle.png", imageSize)
-    hurtImage = loadTexture("player/ranger/hurt.png", imageSize)
-    walkImages = [loadTexture("player/ranger/walk1.png", imageSize), loadTexture("player/ranger/walk2.png", imageSize)]
-    attackImages = [loadTexture("player/ranger/fire.png", imageSize), loadTexture("player/ranger/reload0.png", imageSize)]
-    reloadImages = [loadTexture("player/ranger/reload1.png", imageSize), loadTexture("player/ranger/reload2.png", imageSize)]
+    idleImage = loadTexture("player/ranger/idle.png", imageSize, mirror=True)
+    hurtImage = loadTexture("player/ranger/hurt.png", imageSize, mirror=True)
+    walkImages = [loadTexture("player/ranger/walk1.png", imageSize, mirror=True), loadTexture("player/ranger/walk2.png", imageSize, mirror=True)]
+    attackImages = [loadTexture("player/ranger/fire.png", imageSize, mirror=True), loadTexture("player/ranger/reload0.png", imageSize, mirror=True)]
+    reloadImages = [loadTexture("player/ranger/reload1.png", imageSize, mirror=True), loadTexture("player/ranger/reload2.png", imageSize, mirror=True)]
     def __init__(self, x, y):
         super().__init__(x,y)
         self.maxAmmo = 3
         self.ammo=self.maxAmmo
-        self.movementSpeed=1.5 # 2?
+        self.movementSpeed=1.5
     def update(self):
         super().update()
 
@@ -888,7 +891,7 @@ class Robot(Enemy):
             else:
                 self.basicMove(spdMult=-1)
                 #just shootin
-                if random.random()<0.1:
+                if random.random()<0.05:
                     self.state = 1
                     self.stateTimer = 0
 
@@ -897,14 +900,16 @@ class Robot(Enemy):
             self.stateTimer+=1
             if self.stateTimer==1:
                 self.image = self.idleImage
-            elif self.stateTimer==40:
-                self.image = self.fireImage
-            elif self.stateTimer==60:
+            elif self.stateTimer==30:
                 self.image = self.hurtImage
+            elif self.stateTimer==70:
+                self.image = self.fireImage
                 hyp = math.sqrt((self.x-game.player.x)**2 + (self.y-game.player.y)**2)
                 dx = (game.player.x-self.x)/hyp
                 dy = (game.player.y-self.y)/hyp
                 game.room.projectiles.append(Missile(self.x, self.y, dx*3, dy*3))
+            elif self.stateTimer==80:
+                self.image = self.idleImage
             elif self.stateTimer>90:
                 self.state = 0
 
@@ -1461,6 +1466,7 @@ class Spore(Projectile):
         super().__init__(x,y,xv,yv)
         self.age = 0
         self.owner= owner
+        self.bounces=16
 
     def update(self):
         super().update()
@@ -1620,7 +1626,7 @@ class Magnet(Item):
         game.player.magnet+=1
     
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,ColdCore,FireSword,Magnet]
+allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,Mosscrystal,ColdCore,FireSword,Magnet]
 roomPresets=[
     [[
     createWallF(300,300,200,50),
@@ -1782,9 +1788,11 @@ roomPresets=[
     createWallF(380,200,40,140, occurance=0.5),
     ],[
     createF([Hjuldjurplant],140,70),
-    createF([Hjuldjur],lambda :random.randint(100,game.room.roomSize[0]-100),70, depth=2, occurance=0.5),
+    createF([Hjuldjur],70,70, depth=5, occurance=0.5),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),70, depth=2, occurance=0.5),
     createF([Schmitt, Sledger, SkuggVarg],250,250, depth = 4),
-    createF([Hjuldjur],lambda :random.randint(100,game.room.roomSize[0]-100),430, depth=2, occurance=0.5),
+    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),430, depth=2, occurance=0.5),
+    createF([Hjuldjur],430,430, depth=5, occurance=0.5),
     createF([Hjuldjurplant],360,430),
     ],[
     createF([Coin],70,70),
@@ -1827,4 +1835,4 @@ pygame.quit()
 quit()
 
 #ddddddddd         ddddddddd            aa  bssssss  
-#aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD
+#aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD 

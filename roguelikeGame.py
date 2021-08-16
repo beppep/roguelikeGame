@@ -22,7 +22,7 @@ display = (1200,700)
 pygame.font.init()
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
-
+boost = 5
 
 class Sound():
     volume = 1
@@ -131,8 +131,17 @@ class Floor():
             self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
+        for i in range(boost): #boost
+            self.startRoom.items.append(random.choice(allItems)(250,250))
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
+        if game.depth==5:  # boss rooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooom!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            bossRoom = Room([[],[createF([Boss],250,150)],[]],[0,-1])
+            self.startRoom.links[0]=bossRoom
+            bossRoom.links[2]=self.startRoom
+            self.rooms.append(bossRoom)
+            self.roomPosList.append([-1,0])
+            return
         numOfRooms=random.randint(4+game.depth,6+game.depth)
         for i in range(numOfRooms):
             roomPos=[0,0]
@@ -141,7 +150,7 @@ class Floor():
                 while not None in connectedRoom.links:
                     connectedRoom = random.choice(self.rooms)
                 connectionDirection = random.choice([i for i in range(4) if connectedRoom.links[i]==None])
-                roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers
+                roomPos=list(map(sum, zip(connectedRoom.floorPos[:],directionHash[connectionDirection]))) # Vector additon of two lists of integers #lol gotta style right
             self.roomPosList.append(roomPos)
             if(i == numOfRooms-1):
                 room = Room([[],[],[createF([StairCase],250,250),]],roomPos) # Final room of floor
@@ -238,13 +247,17 @@ class Room():
             proj.draw()
         for enemy in self.enemies:
             enemy.draw()
+    def drawRoomUI(self):
+        for e in self.enemies:
+            if isinstance(e,Boss): #bad code?
+                e.drawUI()
 class Game():
 
     def __init__(self):
         self.player = random.choice((Warrior,Ranger))(250,250)
         self.room = None
         self.floor = None
-        self.depth = 0
+        self.depth = 0+boost #0
 
     def update(self):
         self.room.update()
@@ -292,6 +305,7 @@ class Game():
         pygame.draw.rect(gameDisplay, (110,110,100), ((display[0]+game.room.roomSize[0])/2,0,(display[0]-game.room.roomSize[0])/2,display[1]))
         pygame.draw.rect(gameDisplay, (110,110,100), (0,(display[1]+game.room.roomSize[1])/2,display[0],(display[1]-game.room.roomSize[1])/2))
         self.player.drawPlayerUI()
+        self.room.drawRoomUI()
         self.floor.drawMinimap()
  
 
@@ -1317,6 +1331,136 @@ class Mercenary(Enemy):
     def die(self):
         super().die()
         game.room.enemies.append(Chest(self.x,self.y))
+class fungusArm(Enemy):
+
+    radius = 16
+    imageSize = 128
+    idleImage = loadTexture("enemies/lord fungus/arm2.png", imageSize)
+    attackImages = [loadTexture("enemies/lord fungus/arm"+str(i)+".png", 128) for i in (1,2,3)]
+
+    def __init__(self, x, y, owner):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 2
+        self.owner = owner
+        self.state = 1
+
+    def update(self):
+        super().update()
+        
+        #bite
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer==1:
+                self.image = self.attackImages[0]
+            elif self.stateTimer==20:
+                self.image = self.attackImages[1]
+            elif self.stateTimer>=50:
+                self.image = self.attackImages[2]
+                target = game.findPlayer(self.x, self.y, 16)
+                if target:
+                    target.hurt()
+                self.state=0
+                self.stateTimer=0
+
+        #chillin and leavin
+        if self.state == 0:
+            self.stateTimer+=1
+            if self.stateTimer==1:
+                self.image = self.attackImages[2]
+            if self.stateTimer==60:
+                self.image = self.attackImages[0]
+            elif self.stateTimer>70:
+                game.remove(self, game.room.enemies)
+
+    def hurt(self,damage=None):
+        super().hurt(damage)
+        self.owner.hurt(damage)
+    def die(self):
+        super().die()
+        self.owner.arms-=1
+
+class Boss(Enemy):
+    
+    radius = 64
+    imageSize = 512
+    idleImage = loadTexture("enemies/lord fungus/boss2.png", imageSize)
+    screamImage = loadTexture("enemies/lord fungus/boss3.png", imageSize)
+    sleepImage = loadTexture("enemies/lord fungus/boss1.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.hp = 32
+        self.movementSpeed = 0.1
+        self.coins = 0
+        self.arms = 8
+
+    def update(self):
+        super().update()
+
+        #IDLE
+        if self.state == 0:
+            self.image = self.idleImage
+            self.basicMove()
+            if random.random()<0.02:
+                self.state = 2
+                self.stateTimer = 0
+            if random.random()<0.05:
+                self.state = 3
+                self.stateTimer = 0
+            if random.random()<0.01:
+                self.state = 4
+                self.stateTimer = 0
+
+        #SPORES
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer==10: #summon spores
+                self.image = self.screamImage
+                for i in range(4):
+                    spore = Spore(self.x+directionHash[i][0]*64,self.y+directionHash[i][1]*64,*directionHash[i])
+                    spore.createOwner=True
+                    game.room.projectiles.append(spore)
+            if self.stateTimer==60:
+                self.image = self.idleImage
+            if self.stateTimer>=200:
+                self.state = 0
+
+        #ARMS
+        if self.state == 3:
+            self.stateTimer+=1
+            if self.stateTimer==20: #summon arms
+                self.image = self.screamImage
+                #additional arm at u which cant die
+                arm = fungusArm(game.player.x+random.randint(-16,16), game.player.y+random.randint(-16,16), owner=self)
+                game.room.enemies.append(arm)
+                #many arms
+                for i in range(self.arms):
+                    arm = fungusArm(random.randint(100,game.room.roomSize[0]-100),random.randint(100,game.room.roomSize[1]-100), owner=self)
+                    game.room.enemies.append(arm)
+            if self.stateTimer==60:
+                self.image = self.idleImage
+            if self.stateTimer>=200:
+                self.state = 0
+
+        #SLEEP
+        if self.state == 4:
+            self.stateTimer+=1
+            if self.stateTimer==20:
+                self.image = self.sleepImage
+            if self.stateTimer>=200:
+                self.state = 0
+    
+    def drawUI(self):
+        scale = 20
+        pygame.draw.rect(gameDisplay, (255,0,0), (display[0]//2 - 32//2*scale, display[1]-50-32, scale*self.hp, 32))
+        
+    def die(self):
+        super().die()
+        #game.room.enemies = []
+        #game.room.enemies.append(Chest(self.x,self.y))
+        print("you win")
 
 class Projectile():
     def __init__(self, x, y, xv, yv):
@@ -1462,11 +1606,12 @@ class Spore(Projectile):
     image = loadTexture("enemies/svamp/spore.png", imageSize)
     puffImage = loadTexture("enemies/svamp/sporepuff.png", imageSize)
 
-    def __init__(self, x, y, xv, yv, owner):
+    def __init__(self, x, y, xv, yv, owner=None):
         super().__init__(x,y,xv,yv)
         self.age = 0
         self.owner= owner
         self.bounces=16
+        self.createOwner = False #for boss spores
 
     def update(self):
         super().update()
@@ -1480,8 +1625,12 @@ class Spore(Projectile):
             if game.findPlayer(self.x, self.y, 24):
                 game.player.hurt()
         if self.age == 120:
-            self.owner.x = self.x
-            self.owner.y = self.y
+            if self.owner:
+                self.owner.x = self.x
+                self.owner.y = self.y
+            elif self.createOwner:
+                game.room.enemies.append(Svamp(self.x,self.y))
+                self.createOwner=False
             game.remove(self,game.room.projectiles)
 
 class Item():
@@ -1532,6 +1681,13 @@ class Coin(Item):
     showItem = False
     def pickup(self):
         game.player.coins+=1
+        if game.player.mosscrystal:
+            for i in range(game.player.mosscrystal):
+                print(i)
+                a = random.random()*6.28
+                dx = math.cos(a)
+                dy = math.sin(a)
+                game.room.projectiles.append(Emerald(game.player.x,game.player.y, dx*3, dy*3))
     def update(self):
         super().update()
         if game.player.magnet and game.findPlayer(self.x,self.y,50*game.player.magnet):

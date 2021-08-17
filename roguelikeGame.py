@@ -129,7 +129,7 @@ class Floor():
     def __init__(self,presets):
         self.shopPosition = (0,0)
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[createF([ShockLink],400,200),createF([ShockLink],400,100)]],[0,0]) # first room is empty
+            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
         for i in range(boost): #boost
@@ -368,6 +368,8 @@ class Player():
         self.y = y
         self.xdir = 1 #senaste man tittade
         self.ydir = 0
+        self.lastX = x #senaste man var synlig
+        self.lastY = y
         self.hp = 3
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
@@ -410,6 +412,9 @@ class Player():
 
         if self.invincibility>0:
             self.invincibility-=1
+        else:
+            self.lastX = self.x
+            self.lastY = self.y
 
         # IDLE
         if self.state == 0:
@@ -789,18 +794,19 @@ class Enemy():
     def basicMove(self,spdMult=1,target=None):
         if target==None:
             target=game.player
-        hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2)
+        if target == game.player:
+            x = target.lastX
+            y = target.lastY
+        else:
+            x = target.x
+            y = target.y
+        hyp = math.sqrt((x-self.x)**2+(y-self.y)**2)
         if hyp == 0:
             return #to not set xdir and ydir to 0 because then they shoot projs that are still
-        self.xdir = (target.x-self.x)/hyp
-        self.ydir = (target.y-self.y)/hyp
-        if self.xdir or self.ydir: #should now be true lol
-            self.x += self.xdir*self.movementSpeed*spdMult
-            self.y += self.ydir*self.movementSpeed*spdMult
-            #self.image = random.choice(self.walkImages+[self.idleImage])
-        else:
-            pass
-            #self.image = self.idleImage
+        self.xdir = (x-self.x)/hyp
+        self.ydir = (y-self.y)/hyp
+        self.x += self.xdir*self.movementSpeed*spdMult
+        self.y += self.ydir*self.movementSpeed*spdMult
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -988,9 +994,9 @@ class Robot(Enemy):
                 self.image = self.hurtImage
             elif self.stateTimer==70:
                 self.image = self.fireImage
-                hyp = math.sqrt((self.x-game.player.x)**2 + (self.y-game.player.y)**2)
-                dx = (game.player.x-self.x)/hyp
-                dy = (game.player.y-self.y)/hyp
+                hyp = math.sqrt((self.x-game.player.lastX)**2 + (self.y-game.player.lastY)**2)
+                dx = (game.player.lastX-self.x)/hyp
+                dy = (game.player.lastY-self.y)/hyp
                 game.room.projectiles.append(Missile(self.x, self.y, dx*3, dy*3))
             elif self.stateTimer==80:
                 self.image = self.idleImage
@@ -1062,7 +1068,7 @@ class Schmitt(Enemy):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 5
-        self.movementSpeed = 1
+        self.movementSpeed = 0.8
         self.coins = 2
 
     def update(self):
@@ -1473,7 +1479,7 @@ class Boss(Enemy):
         if self.state == 0:
             self.image = self.idleImage
             self.basicMove()
-            if random.random()<0.02:
+            if random.random()<0.01:
                 self.state = 2
                 self.stateTimer = 0
             if random.random()<0.05:
@@ -1503,7 +1509,7 @@ class Boss(Enemy):
             if self.stateTimer==20: #summon arms
                 self.image = self.screamImage
                 #additional arm at u which cant die
-                arm = fungusArm(game.player.x+random.randint(-16,16), game.player.y+random.randint(-16,16), owner=self)
+                arm = fungusArm(game.player.lastX+random.randint(-16,16), game.player.lastY+random.randint(-16,16), owner=self)
                 game.room.enemies.append(arm)
                 #many arms
                 for i in range(self.arms):
@@ -1606,7 +1612,6 @@ class Missile(Projectile):
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2,self.imageSize//2), self.a)#slow
-
 class Sapphire(Projectile):
 
     evil = False
@@ -1729,7 +1734,7 @@ class Spore(Projectile):
             if game.findPlayer(self.x, self.y, 24):
                 game.player.hurt()
         if self.age == 120:
-            if self.owner:
+            if self.owner and not self.owner.state==-1:
                 self.owner.x = self.x
                 self.owner.y = self.y
             elif self.createOwner:
@@ -1777,7 +1782,8 @@ class StairCase(Item):
         game.enterFloor(Floor(roomPresets))
         game.player.x = self.x
         game.player.y = self.y
-        game.player.coins+=(game.player.coins//2)*game.player.piggyBank
+        for i in range(game.player.coins*game.player.piggyBank//2):
+            game.room.items.append(Coin(random.randint(100,400),random.randint(100,400)))
         game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup 
 class Coin(Item):
 
@@ -1791,7 +1797,7 @@ class Coin(Item):
                 a = random.random()*6.28
                 dx = math.cos(a)
                 dy = math.sin(a)
-                game.room.projectiles.append(Emerald(game.player.x,game.player.y, dx*3, dy*3))
+                game.room.projectiles.append(Emerald(self.x,self.y, dx*3, dy*3))
     def update(self):
         super().update()
         if game.player.magnet and game.findPlayer(self.x,self.y,50*game.player.magnet):
@@ -1835,14 +1841,14 @@ class Icecrystal(Item):
     def pickup(self):
         game.player.icecrystal+=3
 class Crystal(Item):
-    price=16
+    price=14
     imageSize = 64
     image = loadTexture("items/crystal.png", imageSize)
 
     def pickup(self):
         game.player.crystal+=3
 class Mosscrystal(Item):
-    price=16
+    price=1
     imageSize = 64
     image = loadTexture("items/mosscrystal.png", imageSize)
 
@@ -1856,7 +1862,7 @@ class Bouncer(Item):
     def pickup(self):
         game.player.projBounces+=1
 class IceShield(Item):
-    price=8
+    price=6
     imageSize = 128
     image = loadTexture("items/iceShield.png", imageSize)
 
@@ -1878,7 +1884,7 @@ class FireSword(Item):
     def pickup(self):
         game.player.fireSword+=1    
 class Magnet(Item):
-    price=11
+    price=3
     imageSize = 128
     image = loadTexture("items/magnet.png", imageSize)
 

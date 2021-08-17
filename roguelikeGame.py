@@ -314,6 +314,7 @@ class Game():
         self.room.drawRoomUI()
         self.floor.drawMinimap()
         for drawFunction in self.drawFunctionQ:
+            print(drawFunction)
             drawFunction[0]()
             drawFunction[1]-=1
             if(drawFunction[1]<=0):
@@ -566,9 +567,11 @@ class Warrior(Player):
                             target.hurt()
                             alreadyHit.append(target)
                             print("shockHit")
-                            def drawShock():
-                                pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
-                            game.drawFunctionQ.append([drawShock,10])
+                            def createDrawShock(oldPos,newPos):
+                                def drawShock():
+                                    pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
+                                return drawShock
+                            game.drawFunctionQ.append([createDrawShock(oldPos,newPos),10])
 
                         else:
                             break
@@ -1879,7 +1882,6 @@ class Magnet(Item):
 
     def pickup(self):
         game.player.magnet+=1
-<<<<<<< HEAD
 class PiggyBank(Item):
     price=20
     imageSize = 128
@@ -1909,9 +1911,6 @@ class ShockLink(Item):
 #     def pickup(self):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
-=======
-
->>>>>>> 857919f4aefa046a20162a31597b38d748984edf
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,Mosscrystal,ColdCore,FireSword,Magnet,PiggyBank,FireStar,ShockLink]
 roomPresets=[

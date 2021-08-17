@@ -127,6 +127,7 @@ def createWallF(x,y,w,h,occurance=1):
 
 class Floor():
     def __init__(self,presets):
+        self.shopPosition = (0,0)
         if game.depth==0:
             self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[createF([ShockLink],400,200),createF([ShockLink],400,100)]],[0,0]) # first room is empty
         else:
@@ -155,6 +156,7 @@ class Floor():
             if(i == numOfRooms-1):
                 room = Room([[],[],[createF([StairCase],250,250),]],roomPos) # Final room of floor
             elif(i == numOfRooms-2):
+                self.shopPosition = roomPos
                 room = Room([[],[createF([Statue],250,150)],[createF(allItems,400,250,shop=True),createF(allItems,300,250,shop=True),createF(allItems,200,250,shop=True),createF([Heart],100,250,shop=True),],],roomPos)
             else:
                 room = Room(random.choice(presets),roomPos)
@@ -172,6 +174,9 @@ class Floor():
                     pygame.draw.line(gameDisplay,(200,200,200),[display[0]-100+pos[0]*20+5,100+pos[1]*20+5],[display[0]-100+pos2[0]*20+5,100+pos2[1]*20+5],3)
             pos=game.room.floorPos
             pygame.draw.circle(gameDisplay, (200,0,0),[display[0]-100+pos[0]*20+5,100+pos[1]*20+5],3)
+            if self.shopPosition:
+                pos = self.shopPosition
+                pygame.draw.circle(gameDisplay, (200,150,0),[display[0]-100+pos[0]*20+5,100+pos[1]*20+5],3)
 
 class Room():
     def __init__(self,preset,floorPos):
@@ -914,18 +919,18 @@ class Pufferfish(Enemy):
             self.basicMove(spdMult=0.5)
             if self.stateTimer==1:
                 self.image = self.attackImages[0]
-            elif self.stateTimer==8:
+            elif self.stateTimer==10:
                 self.image = self.attackImages[1]
-            elif self.stateTimer==15:
+            elif self.stateTimer==20:
                 self.image = self.attackImages[2]
                 target = game.findPlayer(self.x, self.y, 16)
                 if target:
                     target.hurt()
-            elif self.stateTimer==30:
+            elif self.stateTimer==35:
                 self.image = self.attackImages[1]
-            elif self.stateTimer==45:
+            elif self.stateTimer==50:
                 self.image = self.attackImages[0]
-            elif self.stateTimer>60:
+            elif self.stateTimer>70:
                 self.image = self.idleImage
                 self.state = 0
 class Robot(Enemy):
@@ -986,7 +991,7 @@ class Robot(Enemy):
                 game.room.projectiles.append(Missile(self.x, self.y, dx*3, dy*3))
             elif self.stateTimer==80:
                 self.image = self.idleImage
-            elif self.stateTimer>90:
+            elif self.stateTimer>100:
                 self.state = 0
 
     def die(self):
@@ -1029,18 +1034,18 @@ class SkuggVarg(Enemy):
         #ATTACK
         if self.state == 1:
             self.stateTimer+=1
-            if self.stateTimer<24:
+            if self.stateTimer<32:
                 self.x+=self.xdir*2
                 self.y+=self.ydir*2
-                self.image = self.attackImages[self.stateTimer//6]
-            elif self.stateTimer==24:
+                self.image = self.attackImages[self.stateTimer//8]
+            elif self.stateTimer==32:
                 self.image = self.attackImages[4]
                 target = game.findPlayer(self.x, self.y, 32)
                 if target:
                     target.hurt()
-            elif 30<self.stateTimer<62:
-                self.image = self.attackImages[(62-self.stateTimer)//8]
-            elif self.stateTimer>=62:
+            elif 32<self.stateTimer<80:
+                self.image = self.attackImages[(80-self.stateTimer)//12]
+            elif self.stateTimer>=80:
                 self.image = self.idleImage
                 self.state = 0
 class Schmitt(Enemy):
@@ -1289,8 +1294,8 @@ class Hjuldjur(Enemy):
     def __init__(self, x, y):
         super().__init__(x,y)
         self.image = self.idleImage
-        self.hp = 3
-        self.movementSpeed=2.5
+        self.hp = 2
+        self.movementSpeed=2
         self.invincibility = 30
 
     def update(self):
@@ -1471,7 +1476,7 @@ class Boss(Enemy):
             if random.random()<0.05:
                 self.state = 3
                 self.stateTimer = 0
-            if random.random()<0.01:
+            if random.random()<0.02:
                 self.state = 4
                 self.stateTimer = 0
 
@@ -1508,6 +1513,7 @@ class Boss(Enemy):
 
         #SLEEP
         if self.state == 4:
+            self.hp+=0.02
             self.stateTimer+=1
             if self.stateTimer==20:
                 self.image = self.sleepImage
@@ -1873,6 +1879,7 @@ class Magnet(Item):
 
     def pickup(self):
         game.player.magnet+=1
+<<<<<<< HEAD
 class PiggyBank(Item):
     price=20
     imageSize = 128
@@ -1902,6 +1909,9 @@ class ShockLink(Item):
 #     def pickup(self):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
+=======
+
+>>>>>>> 857919f4aefa046a20162a31597b38d748984edf
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,Mosscrystal,ColdCore,FireSword,Magnet,PiggyBank,FireStar,ShockLink]
 roomPresets=[
@@ -1957,10 +1967,10 @@ roomPresets=[
 
     [[
     ],[
-    createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
-    createF([Animus],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
-    createF([Pufferfish],300,350),
-    createF([Sledger],200,250, depth=4),
+    createF([Robot],400,400,depth=2),
+    createF([Animus],200,lambda :random.randint(200,game.room.roomSize[1]-200)),
+    createF([Pufferfish],100,100),
+    createF([Sledger],250,250, depth=4),
     ],[
     createF([Fruit],200,300, occurance=0.1),
     createF([Stick],250,300, occurance=0.2),
@@ -1986,10 +1996,11 @@ roomPresets=[
     ],[
     createF([Chest],250,250),
     createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), depth = 2),
+    createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), depth = 3),
     createF([Saw],lambda :random.randint(100,400),lambda :random.randint(100,400), depth = 5),
     ]+[
     createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.5),
-    ]*3,
+    ]*2,
     [
     #createF(allItems,600,350),
     ],], # Laser Room

@@ -22,7 +22,7 @@ display = (1200,700)
 pygame.font.init()
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
-boost = 5
+boost = 0
 
 class Sound():
     volume = 1
@@ -128,7 +128,7 @@ def createWallF(x,y,w,h,occurance=1):
 class Floor():
     def __init__(self,presets):
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
+            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[createF([ShockLink],400,200),createF([ShockLink],400,100)]],[0,0]) # first room is empty
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
         for i in range(boost): #boost
@@ -258,6 +258,7 @@ class Game():
         self.room = None
         self.floor = None
         self.depth = 0+boost #0
+        self.drawFunctionQ=[] # fill it with [drawFunction, frameCountDown]
 
     def update(self):
         self.room.update()
@@ -307,6 +308,14 @@ class Game():
         self.player.drawPlayerUI()
         self.room.drawRoomUI()
         self.floor.drawMinimap()
+        for drawFunction in self.drawFunctionQ:
+            drawFunction[0]()
+            drawFunction[1]-=1
+            if(drawFunction[1]<=0):
+                self.drawFunctionQ.remove(drawFunction)
+
+
+
  
 
 class Wall():
@@ -375,8 +384,17 @@ class Player():
         self.attackDamage=1
         self.fireSword=0
         self.magnet = 0
+        self.piggyBank = 0
+        self.fireStar = 0
+        self.shockLink = 0
+
+        self.furyBuff=0 # Only Warrior
+        self.furyTime=0 # Only Warrior
 
         self.shownItems = {}
+
+    def getKill(self,enemy):
+        pass
 
     def edge(self, verticalWall):
         pass
@@ -441,7 +459,7 @@ class Player():
             wall.adjust(self)
 
     def basicMove(self, spdMult=1):
-        speed = self.movementSpeed
+        speed = self.movementSpeed+self.furyBuff
         if not game.room.enemies:
             speed = max(2.2, speed) #speed in empty rooms
             
@@ -509,7 +527,6 @@ class Warrior(Player):
 
     swipeImage = loadTexture("player/warrior/swipe.png", imageSize)
     fireSwipeImage = loadTexture("player/warrior/fireswipe.png", imageSize)
-
     def update(self):
         super().update()
 
@@ -523,10 +540,34 @@ class Warrior(Player):
                 attackX = self.x+self.xdir*self.swipeRange
                 attackY = self.y+self.ydir*self.swipeRange
                 targets = game.findEnemies(attackX, attackY, 30)
+                alreadyHit=[]
                 for target in targets:
-                    target.hurt()
+                    alreadyHit.append(target)
+                    if(target.burning>0):
+                        target.hurt((self.attackDamage+self.furyBuff)*(1+self.fireStar))
+                    else:
+                        target.hurt(self.attackDamage+self.furyBuff)
                     if self.fireSword:
                         target.fire(self.fireSword*30)
+                if(len(targets)>0):
+                    target=random.choice(targets)
+                    for i in range(self.shockLink):
+                        targets = game.findEnemies(target.x, target.y, 80)
+                        targets=[target for target in targets if (target not in alreadyHit)]
+                        if(len(targets)>0):
+                            oldPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
+                            target=random.choice(targets)
+                            newPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
+                            target.hurt()
+                            alreadyHit.append(target)
+                            print("shockHit")
+                            def drawShock():
+                                pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
+                            game.drawFunctionQ.append([drawShock,10])
+
+                        else:
+                            break
+
                 """
                 for i in range(self.icecrystal):
                     if random.random()<0.5:
@@ -561,6 +602,11 @@ class Warrior(Player):
                 self.image = self.rollImages[0]
             elif self.stateTimer>=30:
                 self.state = 0
+        if(self.furyTime>0):
+            self.furyTime-=1
+        else:
+            self.furyBuff=0
+
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -577,6 +623,11 @@ class Warrior(Player):
                     image = self.fireSwipeImage
                 blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
         super().draw()
+    def getKill(self,enemy):
+        super().getKill(enemy)
+        if(self.furyTime>0):
+            self.furyBuff+=0.5
+        self.furyTime=120
 class Ranger(Player):
     radius = 16
     imageSize = 128
@@ -590,8 +641,10 @@ class Ranger(Player):
         self.maxAmmo = 3
         self.ammo=self.maxAmmo
         self.movementSpeed=1.5
+        self.fastReload=False
     def update(self):
         super().update()
+        pressed = pygame.key.get_pressed()
 
         # ATAKK
         if self.state == 1:
@@ -636,9 +689,16 @@ class Ranger(Player):
             elif self.stateTimer<30:
                 self.image = self.reloadImages[1]
                 self.ammo=self.maxAmmo
-            elif self.stateTimer<40:
+            elif self.stateTimer<38:
                 self.image = self.reloadImages[0]
+                if(pressed[pygame.K_LSHIFT] or pressed[pygame.K_k]):
+                    self.fastReload=True
+                else:
+                    self.fastReload=False
             elif self.stateTimer<50:
+                if((not (pressed[pygame.K_LSHIFT] or pressed[pygame.K_k])) and self.fastReload):
+                    self.state = 0
+                    self.fastReload=False
                 self.image = self.idleImage
             elif self.stateTimer>=50:
                 self.state = 0
@@ -666,6 +726,7 @@ class Enemy():
         self.burning = 0
         self.coins = 1
     def die(self):
+        game.player.getKill(self)
         game.remove(self,game.room.enemies)
         for i in range(self.coins):
             game.room.items.append(Coin(self.x+random.randint(-8,8),self.y+random.randint(-8,8)))
@@ -745,6 +806,7 @@ class Enemy():
         if(damage==None):
             damage=game.player.attackDamage
         if damage>0.3:
+            print(damage,self)
             random.choice(Sound.hitSounds).play()
         self.hp-=damage
         if self.hp<=0:
@@ -1471,7 +1533,11 @@ class Projectile():
         self.bounces = 0
         if not self.evil:
             self.bounces = game.player.projBounces
-    
+    def changeSize(self,multiplier):
+        self.radius = self.radius*multiplier
+        self.imageSize = int(self.radius*multiplier)
+        self.image = loadTexture(self.imagePath, self.imageSize)
+
     def update(self):
         self.x+=self.xv
         self.y+=self.yv
@@ -1537,6 +1603,7 @@ class Sapphire(Projectile):
     evil = False
     radius = 10
     imageSize = 64
+    imagePath="projectiles/sapphire.png"
     image = loadTexture("projectiles/sapphire.png", imageSize)
 
     def update(self):
@@ -1553,6 +1620,7 @@ class Ruby(Projectile):
     evil = False
     radius = 10
     imageSize = 64
+    imagePath="projectiles/ruby.png"
     image = loadTexture("projectiles/ruby.png", imageSize)
 
     def update(self):
@@ -1569,6 +1637,7 @@ class Emerald(Projectile):
     evil = False
     radius = 10
     imageSize = 64
+    imagePath="projectiles/emerald.png"
     image = loadTexture("projectiles/emerald.png", imageSize)
 
     def update(self):
@@ -1585,6 +1654,7 @@ class Bullet(Projectile):
     evil = False
     radius = 8
     imageSize = 128
+    imagePath="player/ranger/bullet.png"
     image = loadTexture("player/ranger/bullet.png", imageSize)
 
     def update(self):
@@ -1592,12 +1662,35 @@ class Bullet(Projectile):
 
         # HIT ENEMIES
         targets =  game.findEnemies(self.x, self.y, self.radius)
-        for target in targets:
-            target.hurt()
-            if game.player.fireSword:
-                target.fire(game.player.fireSword*30)
         if targets:
             game.remove(self,game.room.projectiles)
+        alreadyHit=[]
+        for target in targets:
+            alreadyHit.append(target)
+            if(target.burning>0):
+                target.hurt(game.player.attackDamage*(1+game.player.fireStar))
+            else:
+                target.hurt()
+            if game.player.fireSword:
+                target.fire(game.player.fireSword*30)
+        if(len(targets)>0):
+            target=random.choice(targets)
+            for i in range(game.player.shockLink):
+                targets = game.findEnemies(target.x, target.y, 80)
+                targets=[target for target in targets if (target not in alreadyHit)]
+                if(len(targets)>0):
+                    oldPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
+                    target=random.choice(targets)
+                    newPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
+                    target.hurt()
+                    alreadyHit.append(target)
+                    print("shockHit")
+                    def drawShock():
+                        pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
+                    game.drawFunctionQ.append([drawShock,10])
+
+                else:
+                    break
 class Spore(Projectile):
 
     evil = True
@@ -1673,6 +1766,7 @@ class StairCase(Item):
         game.enterFloor(Floor(roomPresets))
         game.player.x = self.x
         game.player.y = self.y
+        game.player.coins+=(game.player.coins//2)*game.player.piggyBank
         game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup 
 class Coin(Item):
 
@@ -1683,7 +1777,6 @@ class Coin(Item):
         game.player.coins+=1
         if game.player.mosscrystal:
             for i in range(game.player.mosscrystal):
-                print(i)
                 a = random.random()*6.28
                 dx = math.cos(a)
                 dy = math.sin(a)
@@ -1780,9 +1873,37 @@ class Magnet(Item):
 
     def pickup(self):
         game.player.magnet+=1
-    
+class PiggyBank(Item):
+    price=20
+    imageSize = 128
+    image = loadTexture("items/piggybank.png", imageSize)
+
+    def pickup(self):
+        game.player.piggyBank+=1
+class FireStar(Item):
+    price=15
+    imageSize = 128
+    image = loadTexture("items/firestar.png", imageSize)
+
+    def pickup(self):
+        game.player.fireStar+=1
+class ShockLink(Item):
+    price=16
+    imageSize = 128
+    image = loadTexture("items/shocklink.png", imageSize)
+
+    def pickup(self):
+        game.player.shockLink+=1
+# class ProjectileEnlarger(Item):
+#     price=14
+#     imageSize = 128
+#     image = loadTexture("items/projectilehologram.png", imageSize)
+
+#     def pickup(self):
+#         for proj in [Sapphire,Ruby,Emerald,Bullet]:
+#             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,Mosscrystal,ColdCore,FireSword,Magnet]
+allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,Mosscrystal,ColdCore,FireSword,Magnet,PiggyBank,FireStar,ShockLink]
 roomPresets=[
     [[
     createWallF(300,300,200,50),

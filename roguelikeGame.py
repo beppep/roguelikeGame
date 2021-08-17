@@ -1694,9 +1694,11 @@ class Bullet(Projectile):
                     target.hurt()
                     alreadyHit.append(target)
                     print("shockHit")
-                    def drawShock():
-                        pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
-                    game.drawFunctionQ.append([drawShock,10])
+                    def createDrawShock(oldPos,newPos):
+                        def drawShock():
+                            pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
+                        return drawShock
+                    game.drawFunctionQ.append([createDrawShock(oldPos,newPos),10])
 
                 else:
                     break

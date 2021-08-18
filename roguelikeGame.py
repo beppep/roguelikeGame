@@ -19,6 +19,11 @@ clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
 display = (1200,700)
+gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
+gameDisplay.blit(pygame.image.load(os.path.join(filepath, "textures", "loading.png")),(0,0))
+pygame.display.update()
+pygame.display.set_caption("Roguelike Game")
+pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
 pygame.font.init()
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
@@ -75,7 +80,7 @@ def blitRotate(surf,image, pos, originPos, angle):
 def loadTexture(name, w,h=None, mirror=False):
     if not h:
         h=w
-    image = pygame.image.load(os.path.join(filepath, "textures", name))
+    image = pygame.image.load(os.path.join(filepath, "textures", name)).convert_alpha()
     image = pygame.transform.scale(image, (w, h))
     if mirror:
         return (pygame.transform.flip(image, True, False), image)
@@ -318,11 +323,7 @@ class Game():
             drawFunction[0]()
             drawFunction[1]-=1
             if(drawFunction[1]<=0):
-                self.drawFunctionQ.remove(drawFunction)
-
-
-
- 
+                self.drawFunctionQ.remove(drawFunction) 
 
 class Wall():
 
@@ -2105,11 +2106,6 @@ roomPresets=[
     ],], # Duel
 
 ]
-
-
-gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
-pygame.display.set_caption("Roguelike Game")
-pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
 
 game = Game()
 game.enterFloor(Floor(roomPresets))

@@ -19,6 +19,10 @@ clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
 display = (1200,700)
+pygame.display.init()
+gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
+pygame.display.set_caption("Roguelike Game")
+pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
 pygame.font.init()
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
@@ -179,6 +183,9 @@ class Floor():
                 pygame.draw.circle(gameDisplay, (200,150,0),[display[0]-100+pos[0]*20+5,100+pos[1]*20+5],3)
 
 class Room():
+
+    groundImage = loadTexture("ground1.png",16*32,16*32).convert()
+
     def __init__(self,preset,floorPos):
         self.enemies = []
         self.items = []
@@ -244,6 +251,8 @@ class Room():
     def draw(self):
         roomCorner=((display[0]-self.roomSize[0])/2,(display[1]-self.roomSize[1])/2)
         pygame.draw.rect(gameDisplay,[100,80,50],[*roomCorner,*self.roomSize])#self.roomSize[0],self.roomSize[1]])
+        #
+        gameDisplay.blit(self.groundImage,roomCorner)
         for wall in self.walls:
             wall.draw()
         for item in self.items:
@@ -306,10 +315,10 @@ class Game():
         #gameDisplay.fill((100,100,100))
         self.room.draw()
         self.player.draw()
-        pygame.draw.rect(gameDisplay, (110,110,100), (0,0,(display[0]-game.room.roomSize[0])/2,display[1]))
-        pygame.draw.rect(gameDisplay, (110,110,100), (0,0,display[0],(display[1]-game.room.roomSize[1])/2))
-        pygame.draw.rect(gameDisplay, (110,110,100), ((display[0]+game.room.roomSize[0])/2,0,(display[0]-game.room.roomSize[0])/2,display[1]))
-        pygame.draw.rect(gameDisplay, (110,110,100), (0,(display[1]+game.room.roomSize[1])/2,display[0],(display[1]-game.room.roomSize[1])/2))
+        pygame.draw.rect(gameDisplay, (60,60,55), (0,0,(display[0]-game.room.roomSize[0])/2,display[1]))
+        pygame.draw.rect(gameDisplay, (60,60,55), (0,0,display[0],(display[1]-game.room.roomSize[1])/2))
+        pygame.draw.rect(gameDisplay, (60,60,55), ((display[0]+game.room.roomSize[0])/2,0,(display[0]-game.room.roomSize[0])/2,display[1]))
+        pygame.draw.rect(gameDisplay, (60,60,55), (0,(display[1]+game.room.roomSize[1])/2,display[0],(display[1]-game.room.roomSize[1])/2))
         self.player.drawPlayerUI()
         self.room.drawRoomUI()
         self.floor.drawMinimap()
@@ -2105,11 +2114,6 @@ roomPresets=[
     ],], # Duel
 
 ]
-
-
-gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
-pygame.display.set_caption("Roguelike Game")
-pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
 
 game = Game()
 game.enterFloor(Floor(roomPresets))

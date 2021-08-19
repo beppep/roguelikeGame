@@ -51,7 +51,7 @@ class Sound():
     pygame.mixer.music.load(os.path.join(SOUND_PATH, "Age of War.wav")) #must be wav 16bit and stuff?
     pygame.mixer.music.set_volume(volume*0.1)
     time.sleep(0.1)
-    pygame.mixer.music.play(-1)
+    #pygame.mixer.music.play(-1)
 
 def blitRotate(surf,image, pos, originPos, angle):
 
@@ -258,6 +258,8 @@ class Room():
             wall.draw()
         for item in self.items:
             item.draw()
+        for ally in game.allies:
+            ally.draw()
         for proj in self.projectiles:
             proj.draw()
         for enemy in self.enemies:
@@ -270,6 +272,7 @@ class Game():
 
     def __init__(self):
         self.player = random.choice((Warrior,Ranger))(250,250)
+        self.allies = []
         self.room = None
         self.floor = None
         self.depth = 0+boost #0
@@ -278,6 +281,13 @@ class Game():
     def update(self):
         self.room.update()
         self.player.update()
+        for ally in self.allies:
+            ally.update()
+
+    def gatherAllies(self):
+        for ally in self.allies:
+            ally.x = self.player.x + random.randint(-16,16)
+            ally.y = self.player.y + random.randint(-16,16)
 
     def enterFloor(self,floor):
         self.depth+=1
@@ -324,7 +334,6 @@ class Game():
         self.room.drawRoomUI()
         self.floor.drawMinimap()
         for drawFunction in self.drawFunctionQ:
-            print(drawFunction)
             drawFunction[0]()
             drawFunction[1]-=1
             if(drawFunction[1]<=0):
@@ -368,6 +377,8 @@ class Wall():
 class Player():
 
     radius = 20
+    hiteffectImage = loadTexture("player/hiteffect.png",128)
+    fireHiteffectImage = loadTexture("player/firehiteffect.png",128)
 
     def __init__(self, x, y):
         self.x = x
@@ -424,6 +435,7 @@ class Player():
 
         # IDLE
         if self.state == 0:
+            self.stateTimer+=1
             self.basicMove()
             if pressed[pygame.K_SPACE] or pressed[pygame.K_j]:
                 self.state = 1
@@ -448,6 +460,7 @@ class Player():
                 game.room=game.room.links[1]
                 game.room.loadRoom()
                 self.x=10
+                game.gatherAllies()
             else:
                 self.x=game.room.roomSize[0]
         elif(self.x<0):
@@ -455,6 +468,7 @@ class Player():
                 game.room=game.room.links[3]
                 game.room.loadRoom()
                 self.x=game.room.roomSize[0]-10
+                game.gatherAllies()
             else:
                 self.x=0
         elif(self.y>game.room.roomSize[1]):
@@ -462,6 +476,7 @@ class Player():
                 game.room=game.room.links[2]
                 game.room.loadRoom()
                 self.y=10
+                game.gatherAllies()
             else:
                 self.y=game.room.roomSize[1]
         elif(self.y<0):
@@ -469,6 +484,7 @@ class Player():
                 game.room=game.room.links[0]
                 game.room.loadRoom()
                 self.y=game.room.roomSize[1]-10
+                game.gatherAllies()
             else:
                 self.y=0
 
@@ -492,7 +508,7 @@ class Player():
             self.y += dy*speed*spdMult
             self.xdir = dx
             self.ydir = dy
-            self.image = random.choice(self.walkImages+[self.idleImage])
+            self.image = [self.idleImage,self.walkImages[0],self.idleImage,self.walkImages[1]][int(self.stateTimer*self.movementSpeed//4)%4]
         else:
             self.image = self.idleImage
 
@@ -508,7 +524,9 @@ class Player():
                 target.freeze()
 
     def draw(self):
-        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        shakeX = random.randint(-2*self.furyBuff,2*self.furyBuff)
+        shakeY = random.randint(-2*self.furyBuff,2*self.furyBuff)
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x+shakeX),int((display[1]-game.room.roomSize[1])/2+self.y+shakeY))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
         
         # YOU
@@ -577,7 +595,6 @@ class Warrior(Player):
                             newPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
                             target.hurt()
                             alreadyHit.append(target)
-                            print("shockHit")
                             def createDrawShock(oldPos,newPos):
                                 def drawShock():
                                     pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
@@ -646,7 +663,7 @@ class Warrior(Player):
         super().getKill(enemy)
         if(self.furyTime>0):
             self.furyBuff+=0.5
-        self.furyTime=120
+        self.furyTime=150
 class Ranger(Player):
     radius = 16
     imageSize = 128
@@ -728,6 +745,66 @@ class Ranger(Player):
             pygame.draw.line(gameDisplay, (255,0,0), pos,(pos[0]+self.xdir*500,pos[1]+self.ydir*500), 1)
         super().draw()
 
+class Ally():
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.xdir=1
+        self.ydir=0
+        self.facing=1
+        self.state = 0
+        self.stateTimer = 0
+        self.movementSpeed = 1.5
+    
+    def update(self):
+        if(self.x>game.room.roomSize[0]):
+            self.x=game.room.roomSize[0]
+            self.xdir*=-1
+        elif(self.x<0):
+            self.x=0
+            self.xdir*=-1
+        elif(self.y>game.room.roomSize[1]):
+            self.y=game.room.roomSize[1]
+            self.ydir*=-1
+        elif(self.y<0):
+            self.y=0
+            self.ydir*=-1
+
+        for wall in game.room.walls:
+            wall.adjust(self)
+
+    def edge(self,verticalWall=False):
+        pass
+
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        gameDisplay.blit(self.image[self.facing],(pos[0] - self.imageSize//2, pos[1] - self.imageSize//2))
+
+class WaterSpirit(Ally):
+
+    radius = 16
+    imageSize = 128
+    image = loadTexture("allies/waterspirit.png",imageSize,mirror=True)
+
+    def update(self):
+        if random.random()<0.8:
+            self.xdir = game.player.xdir
+            self.x+=self.xdir*self.movementSpeed
+            self.ydir = game.player.ydir
+            self.y+=self.ydir*self.movementSpeed
+            if self.xdir<0:
+                self.facing=0
+            if self.xdir>0:
+                self.facing=1
+
+        super().update()
+
+        self.stateTimer+=1
+        if self.stateTimer>=90:
+            game.room.projectiles.append(Sapphire(self.x,self.y,self.xdir*3,self.ydir*3))
+            self.stateTimer=0
+
 class Enemy():
 
     frozenImage = loadTexture("enemies/ice.png", 128)
@@ -752,11 +829,11 @@ class Enemy():
         for i in range(game.player.crystal):
             a = random.random()*6.28
             xv, yv = (math.cos(a),math.sin(a))
-            game.room.projectiles.append(Ruby(game.player.x, game.player.y, xv*3+random.random()-0.5, yv*3+random.random()-0.5))
+            game.room.projectiles.append(Ruby(game.player.x, game.player.y, xv*3, yv*3))
         for i in range(game.player.icecrystal):
             a = random.random()*6.28
             xv, yv = (math.cos(a),math.sin(a))
-            game.room.projectiles.append(Sapphire(self.x, self.y, xv*3+random.random()-0.5, yv*3+random.random()-0.5))
+            game.room.projectiles.append(Sapphire(self.x, self.y, xv*3, yv*3))
     def freeze(self):
         if(self.hp>0):
             self.state=-2
@@ -826,8 +903,18 @@ class Enemy():
         if(damage==None):
             damage=game.player.attackDamage
         if damage>0.3:
-            print(damage,self)
             random.choice(Sound.hitSounds).play()
+            pos=((display[0]-game.room.roomSize[0])/2+self.x-64, (display[1]-game.room.roomSize[1])/2+self.y-64)           
+            def createDrawHit(pos):
+                if self.burning:
+                    def drawHit():
+                        gameDisplay.blit(Player.fireHiteffectImage,pos)
+                else:
+                    def drawHit():
+                        gameDisplay.blit(Player.hiteffectImage,pos)
+                return drawHit
+            game.drawFunctionQ.append([createDrawHit(pos),2])
+
         self.hp-=damage
         if self.hp<=0:
             self.die()
@@ -868,10 +955,7 @@ class Chest(Enemy):
                     self.state = 0
                     self.image = self.idleImage
         
-    def hurt(self,damage=None):
-        if(damage==None):
-            damage=game.player.attackDamage
-        self.hp-=damage
+    def die(self):
         self.state = -1
         self.stateTimer = 20
 class Animus(Enemy):
@@ -1412,7 +1496,9 @@ class Mercenary(Enemy):
 
     def die(self):
         super().die()
-        game.room.enemies.append(Chest(self.x,self.y))
+        kista = Chest(self.x,self.y)
+        game.room.enemies.append(kista)
+        kista.lootTable=goodItems
 class fungusArm(Enemy):
 
     radius = 16
@@ -1704,7 +1790,6 @@ class Bullet(Projectile):
                     newPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
                     target.hurt()
                     alreadyHit.append(target)
-                    print("shockHit")
                     def createDrawShock(oldPos,newPos):
                         def drawShock():
                             pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
@@ -1788,6 +1873,7 @@ class StairCase(Item):
         game.enterFloor(Floor(roomPresets))
         game.player.x = self.x
         game.player.y = self.y
+        game.gatherAllies()
         for i in range(game.player.coins*game.player.piggyBank//2):
             game.room.items.append(Coin(random.randint(100,400),random.randint(100,400)))
         game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup 
@@ -1917,6 +2003,13 @@ class ShockLink(Item):
 
     def pickup(self):
         game.player.shockLink+=1
+class WaterFace(Item):
+    price=16
+    imageSize = 128
+    image = loadTexture("items/waterspirit.png", imageSize)
+
+    def pickup(self):
+        game.allies.append(WaterSpirit(self.x,self.y))
 # class ProjectileEnlarger(Item):
 #     price=14
 #     imageSize = 128
@@ -1926,17 +2019,21 @@ class ShockLink(Item):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-allItems=[Fruit,Stick,Fan,Icecrystal,Bouncer,IceShield,Crystal,Mosscrystal,ColdCore,FireSword,Magnet,PiggyBank,FireStar,ShockLink]
+goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace]
+badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet]
+allItems=goodItems+badItems
 roomPresets=[
     [[
-    createWallF(300,300,200,50),
-    createWallF(300,lambda :random.randint(100,200),lambda :random.randint(1,200),50),
+    createWallF(100,100,190,160, occurance=0.3),
+    createWallF(400,100,190,190, occurance=0.3),
+    createWallF(100,400,160,180, occurance=0.3),
+    createWallF(400,400,190,190, occurance=0.3),
     ],[
     createF([Chest],100,100, lootTable=[None,Saw,Svamp], occurance=0.5),
-    createF([Animus,Pufferfish,Skull,Saw,Svamp],150,50),
-    createF([Animus,Pufferfish,Skull,Saw,Sledger],150,50, depth=3),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],150,50, depth=5),
-    createF([Animus,Pufferfish,Robot,Skull,Saw,Hjuldjur],lambda :random.randint(0,500),lambda :random.randint(0,500),occurance=0.5),
+    createF([Animus,Pufferfish,Skull,Saw,Svamp],250,250),
+    createF([Animus,Pufferfish,Skull,Saw,Sledger],250,250, depth=3),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],250,250, depth=5),
+    createF([Animus,Pufferfish,Robot,Skull,Saw,Hjuldjur],lambda :random.randint(200,300),lambda :random.randint(200,300),occurance=0.5),
     ],[
     createF(allItems,200,400,occurance=0.2),
     ],], # Test Room using everything
@@ -1968,7 +2065,7 @@ roomPresets=[
     # ],], # Shop
     
     [[
-    createWallF(100,150,50,100),
+    createWallF(100,100,200,200, occurance=0.5),
     createWallF(300,lambda :random.randint(1,400),100,50),
     ],[
     createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
@@ -2030,6 +2127,7 @@ roomPresets=[
     ],], # Heal
 
     [[
+    createWallF(100,100,180,180, occurance=0.3),
     createWallF(lambda :random.randint(200,300),lambda :random.randint(200,300),lambda :random.randint(20,100),lambda :random.randint(20,100), occurance=0.5),
     createWallF(250,250,100,100, occurance=0.5),
     ],[
@@ -2049,10 +2147,11 @@ roomPresets=[
     createF([SkuggVarg,Sledger,Schmitt],200,250, depth=4),
     createF([SkuggVarg],250,250),
     createF([SkuggVarg,Sledger,Schmitt],300,250, depth=5),
-    createF([Chest],250,250, occurance=0.5),
+    createF([Chest],250,250, occurance=0.5, lootTable=badItems),
     ],[
     createF([Heart],350,250, occurance=0.5),
-    createF([Coin],350,300, occurance=0.9),
+    createF([Coin],350,350, occurance=0.6),
+    createF([Coin],150,150, occurance=0.6),
     ],], # Minotaur
 
     [[
@@ -2061,13 +2160,13 @@ roomPresets=[
     createWallF(250,300,120,20),
     createWallF(250,200,120,20),
     ],[
-    createF([Robot],400,250),
-    createF([Schmitt],50,50, depth=3),
+    createF([Saw],50,450),
+    createF([Schmitt,Sledger],50,50, depth=3),
     createF([Schmitt],50,450, depth=5),
-    createF([Schmitt],450,50, depth=5),
-    createF([Schmitt],450,450, depth=3),
+    createF([Skull],450,50, depth=5),
+    createF([Schmitt],450,450, depth=4),
     ],[
-    createF(allItems,250,250,shop=True),
+    createF(badItems,250,250),
     ],], # Schmitts' housing
 
     [[

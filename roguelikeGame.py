@@ -6,13 +6,16 @@ import math
 
 # sacker man kan göra at göra
 """
-boss
-varierade floors
-Shopkepper
-texturemark
+bättre boss?
+varierade floors?
 ny content
-bra AI movement
-Klasser
+
+nytt hp system med maxhp
+olika stora rum, skärmstorlek, screenshake etc
+att rendera allt pixelperfect?
+att man inte får bara firestars
+thief
+kvadratiska väggblock?
 """
 
 clock = pygame.time.Clock()
@@ -25,6 +28,7 @@ pygame.display.update()
 pygame.display.set_caption("Roguelike Game")
 pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
 pygame.font.init()
+#myfont = pygame.font.SysFont('Calibri', 20) #for pyinstaller
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
 boost = 0
@@ -271,7 +275,7 @@ class Room():
 class Game():
 
     def __init__(self):
-        self.player = random.choice((Warrior,Ranger))(250,250)
+        self.player = random.choice([Thief])(250,250)
         self.allies = []
         self.room = None
         self.floor = None
@@ -314,11 +318,17 @@ class Game():
                 targets.append(proj)
         return targets
 
-    def findPlayer(self, x,y, r):
+    def findPlayer(self, x,y, r, fool=False):
         if self.player.invincibility:
             return 0
         r = r+self.player.radius
-        if (self.player.x-x)**2 + (self.player.y-y)**2 < r**2:
+        if fool:
+            playerX = self.player.fakeX
+            playerY = self.player.fakeY
+        else:
+            playerX = self.player.x
+            playerY = self.player.y
+        if (playerX-x)**2 + (playerY-y)**2 < r**2:
             return self.player
         return 0
 
@@ -385,12 +395,13 @@ class Player():
         self.y = y
         self.xdir = 1 #senaste man tittade
         self.ydir = 0
-        self.lastX = x #senaste man var synlig
-        self.lastY = y
+        self.fakeX = x #det de tror
+        self.fakeY = y
         self.hp = 3
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
         self.invincibility = 0
+        self.invisibility = 0
         self.image = self.idleImage
         self.imageDir = 1
 
@@ -429,15 +440,19 @@ class Player():
 
         if self.invincibility>0:
             self.invincibility-=1
+        elif self.invisibility:
+            if random.random()<0.02:
+                self.fakeX = random.randint(100, game.room.roomSize[0])
+                self.fakeY = random.randint(100, game.room.roomSize[1])
         else:
-            self.lastX = self.x
-            self.lastY = self.y
+            self.fakeX = self.x
+            self.fakeY = self.y
 
         # IDLE
         if self.state == 0:
             self.stateTimer+=1
             self.basicMove()
-            if pressed[pygame.K_SPACE] or pressed[pygame.K_j]:
+            if (pressed[pygame.K_SPACE] or pressed[pygame.K_j]) and not self.invisibility:
                 self.state = 1
                 self.stateTimer = 0
             if pressed[pygame.K_LSHIFT] or pressed[pygame.K_k]:
@@ -512,6 +527,45 @@ class Player():
         else:
             self.image = self.idleImage
 
+    def applyAttackEffects(self, targets):
+        alreadyHit=[]
+        for target in targets:
+            alreadyHit.append(target)
+            if(target.burning>0):
+                target.hurt((self.attackDamage+self.furyBuff)*(1+self.fireStar))
+            else:
+                target.hurt(self.attackDamage+self.furyBuff)
+            if self.fireSword:
+                target.fire(self.fireSword*30)
+        if(len(targets)>0):
+            target=random.choice(targets)
+            for i in range(self.shockLink):
+                targets = game.findEnemies(target.x, target.y, 80)
+                targets=[target for target in targets if (target not in alreadyHit)]
+                if(len(targets)>0):
+                    oldPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
+                    target=random.choice(targets)
+                    newPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
+                    target.hurt()
+                    alreadyHit.append(target)
+                    def createDrawShock(oldPos,newPos):
+                        def drawShock():
+                            pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
+                        return drawShock
+                    game.drawFunctionQ.append([createDrawShock(oldPos,newPos),10])
+
+                else:
+                    break
+
+        """
+        for i in range(self.icecrystal):
+            if random.random()<0.5:
+                game.room.projectiles.append(Sapphire(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
+        for i in range(self.crystal):
+            if random.random()<0.5:
+                game.room.projectiles.append(Ruby(attackX,attackY,self.xdir*3+random.random()-0.5,self.ydir*3+random.random()-0.5))
+        """
+
     def hurt(self):
         self.image = self.hurtImage
         self.hp-=1
@@ -530,7 +584,7 @@ class Player():
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
         
         # YOU
-        if self.stateTimer%2==0 or not self.invincibility:
+        if self.stateTimer%2==0 or not (self.invincibility or self.invisibility):
             gameDisplay.blit(self.image[self.imageDir], (pos[0] - self.imageSize//2, pos[1]-8 - self.imageSize//2))
         if self.iceBody:
             gameDisplay.blit(IceShield.image, (int(pos[0]-4) - IceShield.imageSize//2, int(pos[1]-4) - IceShield.imageSize//2))
@@ -636,6 +690,8 @@ class Warrior(Player):
 
             elif self.stateTimer==20:
                 self.image = self.rollImages[0]
+                self.fakeX = self.x
+                self.fakeY = self.y
             elif self.stateTimer>=30:
                 self.state = 0
         if(self.furyTime>0):
@@ -743,6 +799,76 @@ class Ranger(Player):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         if random.random()<0.5 and self.ammo and self.state==0:
             pygame.draw.line(gameDisplay, (255,0,0), pos,(pos[0]+self.xdir*500,pos[1]+self.ydir*500), 1)
+        super().draw()
+class Thief(Player):
+    imageSize = 128
+    idleImage = loadTexture("player/thief/idle.png", imageSize, mirror=True)
+    hurtImage = loadTexture("player/thief/hurt.png", imageSize, mirror=True)
+    walkImages = [loadTexture("player/thief/walk1.png", imageSize, mirror=True), loadTexture("player/thief/walk2.png", imageSize, mirror=True)]
+    attackImages = [loadTexture("player/thief/attack1.png", imageSize, mirror=True), loadTexture("player/thief/attack2.png", imageSize, mirror=True)]
+    hideImages = [loadTexture("player/thief/hide.png", imageSize, mirror=True)]
+
+    swipeImage = loadTexture("player/thief/swipe.png", imageSize)
+    fireSwipeImage = loadTexture("player/thief/fireswipe.png", imageSize)
+    def update(self):
+        super().update()
+        pressed = pygame.key.get_pressed()
+
+        # ATAKK
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer<5:
+                self.image = self.attackImages[0]
+            elif self.stateTimer == 5:
+                self.image = self.attackImages[1]
+                attackX = self.x+self.xdir*self.swipeRange
+                attackY = self.y+self.ydir*self.swipeRange
+                targets = game.findEnemies(attackX, attackY, 30)
+                self.applyAttackEffects(targets)
+            elif self.stateTimer == 15:
+                self.image = self.attackImages[0]
+            elif self.stateTimer == 20:
+                self.image = self.idleImage
+            elif self.stateTimer>=25:
+                self.state = 0
+
+        # HIDE
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer<30:
+                self.basicMove(spdMult=0.1)
+                self.image = self.hideImages[0]
+                # fanRoll
+                if self.fanRoll:
+                    targets = game.findEnemies(self.x,self.y,self.radius*self.fanRoll)
+                    for target in targets:
+                        target.x-=self.xdir*self.fanRoll
+                        target.y-=self.ydir*self.fanRoll
+                    targets = game.findProjectiles(self.x,self.y,self.radius*self.fanRoll)
+                    for target in targets:
+                        target.xv=-self.xdir*self.fanRoll
+                        target.yv=-self.ydir*self.fanRoll
+            elif self.stateTimer>=30:
+                self.invisibility = not self.invisibility
+                self.fakeX = self.x
+                self.fakeY = self.y
+                self.state = 0
+                self.stateTimer = 0
+
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange), 30)
+
+        # SWIPE
+        if self.state == 1:
+            if 5<=self.stateTimer<=10:
+                x = int(pos[0]+self.xdir*self.swipeRange)
+                y = int(pos[1]+self.ydir*self.swipeRange)
+                if not self.fireSword:
+                    image = self.swipeImage
+                else:
+                    image = self.fireSwipeImage
+                blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
         super().draw()
 
 class Ally():
@@ -878,8 +1004,8 @@ class Enemy():
         if target==None:
             target=game.player
         if target == game.player:
-            x = target.lastX
-            y = target.lastY
+            x = target.fakeX
+            y = target.fakeY
         else:
             x = target.x
             y = target.y
@@ -974,7 +1100,7 @@ class Animus(Enemy):
             if self.hp==2:
                 self.basicMove()
             else:
-                self.basicMove(spdMult=-1)
+                self.basicMove(spdMult=-0.5)
             self.x += random.randint(-1,1)
             self.y += random.randint(-1,1)
 
@@ -1008,7 +1134,7 @@ class Pufferfish(Enemy):
         #IDLE
         if self.state == 0:
             self.basicMove()
-            if game.findPlayer(self.x, self.y, 16):
+            if game.findPlayer(self.x, self.y, 16, fool=True):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -1084,9 +1210,9 @@ class Robot(Enemy):
                 self.image = self.hurtImage
             elif self.stateTimer==70:
                 self.image = self.fireImage
-                hyp = math.sqrt((self.x-game.player.lastX)**2 + (self.y-game.player.lastY)**2)
-                dx = (game.player.lastX-self.x)/hyp
-                dy = (game.player.lastY-self.y)/hyp
+                hyp = math.sqrt((self.x-game.player.fakeX)**2 + (self.y-game.player.fakeY)**2)
+                dx = (game.player.fakeX-self.x)/hyp
+                dy = (game.player.fakeY-self.y)/hyp
                 game.room.projectiles.append(Missile(self.x, self.y, dx*3, dy*3))
             elif self.stateTimer==80:
                 self.image = self.idleImage
@@ -1126,7 +1252,7 @@ class SkuggVarg(Enemy):
         #IDLE
         if self.state == 0:
             self.basicMove()
-            if game.findPlayer(self.x, self.y, 64):
+            if game.findPlayer(self.x, self.y, 64, fool=True):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -1167,7 +1293,7 @@ class Schmitt(Enemy):
         #IDLE
         if self.state == 0:
             self.basicMove()
-            if game.findPlayer(self.x, self.y, 64):
+            if game.findPlayer(self.x, self.y, 64, fool=True):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -1314,7 +1440,7 @@ class Sledger(Enemy):
     def update(self):
         if self.state == 0:
             self.image = self.idleImage
-            if game.findPlayer(self.x,self.y,100):
+            if game.findPlayer(self.x,self.y,100, fool=True):
                 self.basicMove(spdMult=-1)
             else:
                 self.basicMove()
@@ -1465,7 +1591,7 @@ class Mercenary(Enemy):
             if game.player.state==1:
                 self.state = 2
                 self.stateTimer = 0
-            if game.findPlayer(self.x, self.y, 32):
+            if game.findPlayer(self.x, self.y, 32, fool=True):
                 self.state = 1
                 self.stateTimer = 0
 
@@ -1601,7 +1727,7 @@ class Boss(Enemy):
             if self.stateTimer==20: #summon arms
                 self.image = self.screamImage
                 #additional arm at u which cant die
-                arm = fungusArm(game.player.lastX+random.randint(-16,16), game.player.lastY+random.randint(-16,16), owner=self)
+                arm = fungusArm(game.player.fakeX+random.randint(-16,16), game.player.fakeY+random.randint(-16,16), owner=self)
                 game.room.enemies.append(arm)
                 #many arms
                 for i in range(self.arms):
@@ -1770,34 +1896,7 @@ class Bullet(Projectile):
         targets =  game.findEnemies(self.x, self.y, self.radius)
         if targets:
             game.remove(self,game.room.projectiles)
-        alreadyHit=[]
-        for target in targets:
-            alreadyHit.append(target)
-            if(target.burning>0):
-                target.hurt(game.player.attackDamage*(1+game.player.fireStar))
-            else:
-                target.hurt()
-            if game.player.fireSword:
-                target.fire(game.player.fireSword*30)
-        if(len(targets)>0):
-            target=random.choice(targets)
-            for i in range(game.player.shockLink):
-                targets = game.findEnemies(target.x, target.y, 80)
-                targets=[target for target in targets if (target not in alreadyHit)]
-                if(len(targets)>0):
-                    oldPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
-                    target=random.choice(targets)
-                    newPos=((display[0]-game.room.roomSize[0])/2+target.x, (display[1]-game.room.roomSize[1])/2+target.y)
-                    target.hurt()
-                    alreadyHit.append(target)
-                    def createDrawShock(oldPos,newPos):
-                        def drawShock():
-                            pygame.draw.line(gameDisplay, (250+random.random()*5,250+random.random()*5,0), oldPos, newPos, random.randint(8,9))
-                        return drawShock
-                    game.drawFunctionQ.append([createDrawShock(oldPos,newPos),10])
-
-                else:
-                    break
+        game.player.applyAttackEffects(targets)
 class Spore(Projectile):
 
     evil = True
@@ -2227,7 +2326,7 @@ while jump_out == False:
     clock.tick(60)
     
 pygame.quit()
-quit()
+quit() #remove for pyinstaller
 
 #ddddddddd         ddddddddd            aa  bssssss  
 #aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD 

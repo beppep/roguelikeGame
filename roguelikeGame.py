@@ -16,6 +16,8 @@ att rendera allt pixelperfect?
 att man inte får bara firestars
 thief
 kvadratiska väggblock?
+menu
+flera filer?
 """
 
 clock = pygame.time.Clock()
@@ -275,7 +277,7 @@ class Room():
 class Game():
 
     def __init__(self):
-        self.player = random.choice([Thief])(250,250)
+        self.player = random.choice([Warrior,Ranger,Thief])(250,250)
         self.allies = []
         self.room = None
         self.floor = None
@@ -457,6 +459,9 @@ class Player():
                 self.stateTimer = 0
             if pressed[pygame.K_LSHIFT] or pressed[pygame.K_k]:
                 self.state = 2
+                self.stateTimer = 0
+            if pressed[pygame.K_e] or pressed[pygame.K_l]:
+                self.state = 3
                 self.stateTimer = 0
 
         # HURT
@@ -694,6 +699,14 @@ class Warrior(Player):
                 self.fakeY = self.y
             elif self.stateTimer>=30:
                 self.state = 0
+
+        # ???
+        if self.state == 3:
+            self.image = self.rollImages[1]
+            self.stateTimer+=1
+            if self.stateTimer>=20:
+                self.state = 0
+
         if(self.furyTime>0):
             self.furyTime-=1
         else:
@@ -728,6 +741,7 @@ class Ranger(Player):
     walkImages = [loadTexture("player/ranger/walk1.png", imageSize, mirror=True), loadTexture("player/ranger/walk2.png", imageSize, mirror=True)]
     attackImages = [loadTexture("player/ranger/fire.png", imageSize, mirror=True), loadTexture("player/ranger/reload0.png", imageSize, mirror=True)]
     reloadImages = [loadTexture("player/ranger/reload1.png", imageSize, mirror=True), loadTexture("player/ranger/reload2.png", imageSize, mirror=True)]
+    jumpImages = [loadTexture("player/ranger/jump.png", imageSize, mirror=True)]
     def __init__(self, x, y):
         super().__init__(x,y)
         self.maxAmmo = 3
@@ -795,6 +809,27 @@ class Ranger(Player):
             elif self.stateTimer>=50:
                 self.state = 0
 
+        # STOMP
+        if self.state == 3:
+            self.stateTimer+=1
+            if self.stateTimer<20:
+                self.image = self.jumpImages[0]
+                self.invincibility = 1
+            elif self.stateTimer<30:
+                self.image = self.idleImage
+                targets = game.findEnemies(self.x,self.y,100)
+                for target in targets:
+                    hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2+1) #add 1 for fun #also to not divide by 0
+                    target.x += (target.x-self.x)/hyp*10
+                    target.y += (target.y-self.y)/hyp*10
+                targets = game.findProjectiles(self.x,self.y,100)
+                for target in targets:
+                    hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2+1)
+                    target.xv = (target.x-self.x)/hyp
+                    target.yv = (target.y-self.y)/hyp
+            elif self.stateTimer>=30:
+                self.state = 0
+
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         if random.random()<0.5 and self.ammo and self.state==0:
@@ -807,6 +842,7 @@ class Thief(Player):
     walkImages = [loadTexture("player/thief/walk1.png", imageSize, mirror=True), loadTexture("player/thief/walk2.png", imageSize, mirror=True)]
     attackImages = [loadTexture("player/thief/attack1.png", imageSize, mirror=True), loadTexture("player/thief/attack2.png", imageSize, mirror=True)]
     hideImages = [loadTexture("player/thief/hide.png", imageSize, mirror=True)]
+    stealImages = [loadTexture("player/thief/steal1.png", imageSize, mirror=True),loadTexture("player/thief/steal2.png", imageSize, mirror=True)]
 
     swipeImage = loadTexture("player/thief/swipe.png", imageSize)
     fireSwipeImage = loadTexture("player/thief/fireswipe.png", imageSize)
@@ -817,7 +853,7 @@ class Thief(Player):
         # ATAKK
         if self.state == 1:
             self.stateTimer+=1
-            if self.stateTimer<5:
+            if self.stateTimer==1:
                 self.image = self.attackImages[0]
             elif self.stateTimer == 5:
                 self.image = self.attackImages[1]
@@ -854,6 +890,26 @@ class Thief(Player):
                 self.fakeY = self.y
                 self.state = 0
                 self.stateTimer = 0
+
+        # STEAL
+        if self.state == 3:
+            self.stateTimer+=1
+            if self.stateTimer==1:
+                self.image = self.stealImages[0]
+            if self.stateTimer==6:
+                self.image = self.stealImages[1]
+                attackX = self.x+self.xdir*20
+                attackY = self.y+self.ydir*20
+                targets = game.findEnemies(attackX, attackY, 30)
+                #target = random.choice(targets)
+                for target in targets:
+                    if target.coins:
+                        target.coins-=1
+                        game.room.items.append(Coin(target.x+random.randint(-8,8),target.y+random.randint(-8,8),))
+            elif self.stateTimer == 11:
+                self.image = self.idleImage
+            elif self.stateTimer>=15:
+                self.state = 0
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))

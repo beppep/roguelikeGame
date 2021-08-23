@@ -9,6 +9,7 @@ import math
 bättre boss?
 varierade floors?
 ny content
+health bars?
 
 #halvsvåra saker
 
@@ -20,10 +21,7 @@ menu
 flera filer?
 
 enemies:
-portal
-pot
 healer
-bombs
 """
 
 clock = pygame.time.Clock()
@@ -442,6 +440,7 @@ class Player():
         self.piggyBank = 0
         self.fireStar = 0
         self.shockLink = 0
+        self.spirality = 0
 
         self.furyBuff=0 # Only Warrior
         self.furyTime=0 # Only Warrior
@@ -449,7 +448,10 @@ class Player():
         self.shownItems = {} # fill it with Class:num
 
     def getKill(self,enemy):
-        pass
+        for i in range(self.crystal):
+            a = random.random()*6.28
+            xv, yv = (math.cos(a),math.sin(a))
+            game.room.projectiles.append(Ruby(self.x, self.y, xv*3, yv*3))
 
     def edge(self, verticalWall=False):
         pass
@@ -558,7 +560,7 @@ class Player():
             else:
                 damage = self.attackDamage+self.furyBuff
             target.hurt(damage)
-            if self.lifeSteal:
+            if self.lifeSteal>0:
                 self.heal(damage*self.lifeSteal)
             if self.fireSword:
                 target.fire(self.fireSword*30)
@@ -1035,10 +1037,6 @@ class Enemy():
         game.remove(self,game.room.enemies)
         for i in range(self.coins):
             game.room.items.append(Coin(self.x+random.randint(-8,8),self.y+random.randint(-8,8)))
-        for i in range(game.player.crystal):
-            a = random.random()*6.28
-            xv, yv = (math.cos(a),math.sin(a))
-            game.room.projectiles.append(Ruby(game.player.x, game.player.y, xv*3, yv*3))
         for i in range(game.player.icecrystal):
             a = random.random()*6.28
             xv, yv = (math.cos(a),math.sin(a))
@@ -1118,7 +1116,7 @@ class Enemy():
             random.choice(Sound.hitSounds).play()
             pos=((display[0]-game.room.roomSize[0])/2+self.x-64, (display[1]-game.room.roomSize[1])/2+self.y-64)           
             def createDrawHit(pos):
-                if self.burning:
+                if self.burning and game.player.fireStar:
                     def drawHit():
                         gameDisplay.blit(Player.fireHiteffectImage,pos)
                 else:
@@ -1217,6 +1215,7 @@ class Pufferfish(Enemy):
         self.image = self.idleImage
         self.maxhp = 2
         self.hp = 2
+        self.movementSpeed = 0.8
 
     def update(self):
         super().update()
@@ -1238,9 +1237,9 @@ class Pufferfish(Enemy):
                 self.image = self.attackImages[1]
             elif self.stateTimer==20:
                 self.image = self.attackImages[2]
-                target = game.findPlayer(self.x, self.y, 16)
+                target = game.findPlayer(self.x, self.y, 12)
                 if target:
-                    target.hurt()
+                    target.hurt(0.7)
             elif self.stateTimer==35:
                 self.image = self.attackImages[1]
             elif self.stateTimer==50:
@@ -1448,7 +1447,7 @@ class Skull(Enemy):
         if not self.invincibility and self.state==0:
             target = game.findPlayer(self.x, self.y, 8)
             if target:
-                target.hurt()
+                target.hurt(0.8)
                 game.remove(self,game.room.enemies)
 class Saw(Enemy):
 
@@ -1709,6 +1708,8 @@ class Mercenary(Enemy):
                 self.image = self.attackImages[1]
                 if game.findPlayer(self.x, self.y, 30):
                     game.player.hurt()
+                for enemy in game.findEnemies(self.x, self.y, 30):
+                    enemy.hurt()
             elif self.stateTimer>=25:
                 self.state = 0
 
@@ -1821,6 +1822,27 @@ class Portal(Enemy):
             elif self.stateTimer>300:
                 self.image = self.idleImage
                 self.state = 0
+class Tnt(Enemy):
+
+    radius = 32
+    imageSize = 128
+    idleImage = loadTexture("enemies/tnt.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.maxhp = 1
+        self.hp = 1
+        self.coins = 0
+        self.harmless = True
+
+    def fire(self,*a):
+        self.die()
+    def freeze(*a):
+        pass
+    def die(self):
+        game.room.projectiles.append(Explosion(self.x,self.y))
+        game.remove(self,game.room.enemies)
 
 class Boss(Enemy):
     
@@ -1902,8 +1924,9 @@ class Boss(Enemy):
         
     def die(self):
         super().die()
-        #game.room.enemies = []
-        #game.room.enemies.append(Chest(self.x,self.y))
+        game.room.enemies = []
+        game.room.items.append(StairCase(self.x,self.y))
+        game.depth = 0
         print("you win")
 
 class Projectile():
@@ -1924,13 +1947,21 @@ class Projectile():
         self.x+=self.xv
         self.y+=self.yv
 
-        if not self.evil and game.player.magnet:
-            targets = game.findEnemies(self.x,self.y,50+20*game.player.magnet)
-            if targets:
-                target=targets[0]
-                hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2)
-                self.xv += (target.x-self.x)/hyp*game.player.magnet
-                self.yv += (target.y-self.y)/hyp*game.player.magnet
+        if not self.evil and False:
+            if game.player.magnet:
+                targets = game.findEnemies(self.x,self.y,50+20*game.player.magnet)
+                if targets:
+                    target=random.choice(targets)
+                    hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2)
+                    self.xv += (target.x-self.x)/hyp*game.player.magnet
+                    self.yv += (target.y-self.y)/hyp*game.player.magnet
+
+        if game.player.spirality:
+            hyp = math.sqrt(self.xv**2+self.yv**2)
+            self.a = math.atan2(self.yv,self.xv)
+            self.a+=0.01*game.player.spirality
+            self.xv = math.cos(self.a)*hyp
+            self.yv = math.sin(self.a)*hyp
 
 
         if(self.x>game.room.roomSize[0]):
@@ -1968,6 +1999,7 @@ class Missile(Projectile):
     def __init__(self, *args):
         super().__init__(*args)
         self.a = math.atan2(-self.yv,-self.xv)
+    """
     def update(self):
         super().update()
 
@@ -1975,6 +2007,7 @@ class Missile(Projectile):
         if game.findPlayer(self.x, self.y, self.radius):
             game.player.hurt()
             game.remove(self,game.room.projectiles)
+    """
 
     def edge(self, verticalWall=False):
         game.room.projectiles.append(Explosion(self.x,self.y))
@@ -2105,9 +2138,9 @@ class Explosion(Projectile):
         if self.age==1:
             targets =  game.findEnemies(self.x, self.y, self.radius)
             for target in targets:
-                target.hurt()
+                target.hurt(2.5)
             if game.findPlayer(self.x, self.y, self.radius-10):
-                game.player.hurt()
+                game.player.hurt(2)
         if self.age==5:
             self.image=self.image2
         if self.age==10:
@@ -2135,8 +2168,8 @@ class Item():
                         game.player.shownItems[self.__class__]+=1
                     else:
                         game.player.shownItems[self.__class__]=1
-                self.pickup()
                 game.remove(self,game.room.items)
+                self.pickup()
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -2156,7 +2189,7 @@ class StairCase(Item):
         game.gatherAllies()
         for i in range(game.player.coins*game.player.piggyBank//2):
             game.room.items.append(Coin(random.randint(100,400),random.randint(100,400)))
-        game.room.items.append(self) # otherwise Item.update can't delete staircase after pickup 
+        
 class Coin(Item):
 
     imageSize = 128
@@ -2304,16 +2337,27 @@ class ClassChange(Item):
 
     def pickup(self):
         oldPlayer = game.player
-        game.player = random.choice([Warrior,Ranger,Thief])(oldPlayer.x,oldPlayer.y)
+        classes = [Warrior,Ranger,Thief]
+        classes.remove(oldPlayer.__class__)
+        game.player = random.choice(classes)(oldPlayer.x,oldPlayer.y)
+        game.player.coins = oldPlayer.coins
         for i in range(len(oldPlayer.shownItems)):
             clss=list(oldPlayer.shownItems.keys())[i]
             for j in range(oldPlayer.shownItems[clss]):
-                clss.pickup(None)
+                if not clss == ClassChange:
+                    clss(game.player.x,game.player.y).pickup()
                 if(clss.showItem):
                     if (clss in game.player.shownItems):
                         game.player.shownItems[clss]+=1
                     else:
                         game.player.shownItems[clss]=1
+class Spirality(Item):
+    price=7
+    imageSize = 128
+    image = loadTexture("items/spirality.png", imageSize)
+
+    def pickup(self):
+        game.player.spirality+=1
 # class ProjectileEnlarger(Item):
 #     price=14
 #     imageSize = 128
@@ -2324,7 +2368,7 @@ class ClassChange(Item):
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite]
-badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange]
+badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality]
 allItems=goodItems+badItems
 roomPresets=[
     [[
@@ -2333,7 +2377,7 @@ roomPresets=[
     createWallF(100,400,160,180, occurance=0.3),
     createWallF(400,400,190,190, occurance=0.3),
     ],[
-    createF([Chest],100,100, lootTable=[None,Saw,Svamp], occurance=0.5),
+    createF([Chest],100,100, lootTable=[None,Saw,Svamp,Tnt], occurance=0.5),
     createF([Animus,Pufferfish,Skull,Saw,Svamp],250,250),
     createF([Animus,Pufferfish,Skull,Saw,Sledger],250,250, depth=3),
     createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],250,250, depth=5),
@@ -2351,8 +2395,8 @@ roomPresets=[
     ],[
     createF([Animus],250,250),
     createF([Sledger,Schmitt],250,200,depth=3),
-    createF([Pufferfish],200,250,occurance=0.2),
-    createF([Pufferfish],300,250,occurance=0.2),
+    createF([Pufferfish,Tnt],200,250,occurance=0.4),
+    createF([Pufferfish,Tnt],300,250,occurance=0.4),
     createF([Hjuldjurplant,Svamp],300,350,occurance=0.3, depth=4),
     createF([Hjuldjurplant,Svamp],200,350,occurance=0.3, depth=4),
     ],[
@@ -2375,6 +2419,8 @@ roomPresets=[
     createF([Robot],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     createF([Sledger],lambda :random.randint(200,game.room.roomSize[0]-200),lambda :random.randint(200,game.room.roomSize[1]-200),depth=3),
+    createF([Tnt],lambda :random.randint(200,game.room.roomSize[0]-200),lambda :random.randint(200,game.room.roomSize[1]-200),depth=5),
+    createF([Tnt],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=5),
     ],[
     createF(allItems,300,200, occurance=0.1, depth=3),
     ],], # Test Room
@@ -2421,7 +2467,7 @@ roomPresets=[
 
     [[
     ],[
-    createF([Skull],250,250,occurance=0.5),
+    createF([Skull,Tnt],250,250,occurance=0.5),
     createF([Saw],50,50, depth=2),
     createF([Saw],50,450, depth=4),
     createF([Saw],450,50, depth=4),
@@ -2477,6 +2523,8 @@ roomPresets=[
     ],[
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100)),
     ]*2+[
+    createF([Tnt],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),occurance=0.5),
+    ]*4+[
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=3),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=4),
@@ -2505,10 +2553,10 @@ roomPresets=[
 
     [[
     ],[
-    createF([Statue],80,80, occurance=0.5),
-    createF([Statue],420,80, occurance=0.5),
-    createF([Statue],80,420, occurance=0.5),
-    createF([Statue],420,420, occurance=0.5),
+    createF([Statue,Tnt],80,80, occurance=0.6),
+    createF([Statue,Tnt],420,80, occurance=0.6),
+    createF([Statue,Tnt],80,420, occurance=0.6),
+    createF([Statue,Tnt],420,420, occurance=0.6),
     createF([Mercenary],250,250, depth = 3),
     ],[
     ],], # Duel
@@ -2521,6 +2569,7 @@ roomPresets=[
     createF([Hjuldjurplant],420,80, depth=4),
     createF([Portal],250,250, depth=2),
     createF([Portal],80,420, depth=4),
+    createF([Tnt],80,80, occurance=0.4),
     ],[
     createF([Coin],430,430),
     ],], # Portal
@@ -2546,4 +2595,4 @@ pygame.quit()
 quit() #remove for pyinstaller
 
 #ddddddddd         ddddddddd            aa  bssssss  
-#aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD 
+#aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD

@@ -11,7 +11,7 @@ varierade floors?
 ny content
 health bars?
 
-#halvsvåra saker
+#halvsvåra sacker
 
 olika stora rum, skärmstorlek, screenshake etc
 att rendera allt pixelperfect?
@@ -117,9 +117,9 @@ def createF(names,x,y,occurance=1, lootTable=None,depth=1,shop=False):
             return thing
         return None
     return create
-def createWallF(x,y,w,h,occurance=1):
+def createWallF(x,y,w,h,occurance=1, depth=1):
     def createWall():
-        if(random.random()<occurance):
+        if(random.random()<occurance and depth<=game.depth):
             if(callable(x)):
                 posX=x()
             else:
@@ -289,7 +289,7 @@ class Room():
 class Game():
 
     def __init__(self):
-        self.player = random.choice([Warrior, Ranger, Thief])(250,250)
+        self.player = random.choice([Warrior,Ranger,Thief])(250,250)
         self.allies = []
         self.room = None
         self.floor = None
@@ -304,8 +304,8 @@ class Game():
 
     def gatherAllies(self):
         for ally in self.allies:
-            ally.x = self.player.x + random.randint(-16,16)
-            ally.y = self.player.y + random.randint(-16,16)
+            ally.x = self.player.x + random.randint(-32,32)
+            ally.y = self.player.y + random.randint(-32,32)
 
     def enterFloor(self,floor):
         self.depth+=1
@@ -1014,6 +1014,31 @@ class WaterSpirit(Ally):
         if self.stateTimer>=90:
             game.room.projectiles.append(Sapphire(self.x,self.y,self.xdir*3,self.ydir*3))
             self.stateTimer=0
+class Jester(Ally):
+
+    radius = 24
+    imageSize = 128
+    image = loadTexture("allies/jester.png",imageSize,mirror=True)
+
+    def update(self):
+        if random.random()<0.4:
+            x, y = game.player.x, game.player.y
+            hyp = math.sqrt((x-self.x)**2+(y-self.y)**2)
+            if hyp == 0:
+                return
+            self.xdir = (x-self.x)/hyp
+            self.ydir = (y-self.y)/hyp
+            self.x += self.xdir*self.movementSpeed
+            self.y += self.ydir*self.movementSpeed
+            if self.xdir<0:
+                self.facing=0
+            if self.xdir>0:
+                self.facing=1
+
+            game.player.fakeX = self.x
+            game.player.fakeY = self.y
+
+        super().update()
 
 class Enemy():
 
@@ -1437,11 +1462,10 @@ class Skull(Enemy):
     def update(self):
         if self.state == 0:
             self.basicMove()
+            if not game.player.invisibility:
+                self.movementSpeed+=0.01
 
         super().update()
-
-        if not game.player.invisibility:
-            self.movementSpeed+=0.01
 
         #ATTACK
         if not self.invincibility and self.state==0:
@@ -1709,7 +1733,8 @@ class Mercenary(Enemy):
                 if game.findPlayer(self.x, self.y, 30):
                     game.player.hurt()
                 for enemy in game.findEnemies(self.x, self.y, 30):
-                    enemy.hurt()
+                    if not self==enemy:
+                        enemy.hurt()
             elif self.stateTimer>=25:
                 self.state = 0
 
@@ -1850,7 +1875,7 @@ class Boss(Enemy):
     imageSize = 512
     idleImage = loadTexture("enemies/lord fungus/boss2.png", imageSize)
     screamImage = loadTexture("enemies/lord fungus/boss3.png", imageSize)
-    sleepImage = loadTexture("enemies/lord fungus/boss1.png", imageSize)
+    sleepImage = loadTexture("enemies/lord fungus/boss0.png", imageSize)
 
     def __init__(self, x, y):
         super().__init__(x,y)
@@ -1998,7 +2023,7 @@ class Missile(Projectile):
 
     def __init__(self, *args):
         super().__init__(*args)
-        self.a = math.atan2(-self.yv,-self.xv)
+        self.a = math.atan2(self.yv,self.xv)
     """
     def update(self):
         super().update()
@@ -2015,7 +2040,7 @@ class Missile(Projectile):
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
-        blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2,self.imageSize//2), self.a)#slow
+        blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2,self.imageSize//2), self.a+math.pi)#slow
 class Sapphire(Projectile):
 
     evil = False
@@ -2329,7 +2354,7 @@ class VampireBite(Item):
     image = loadTexture("items/vampirebite.png", imageSize)
 
     def pickup(self):
-        game.player.lifeSteal+=0.2
+        game.player.lifeSteal+=0.1
 class ClassChange(Item):
     price=10
     imageSize = 128
@@ -2341,6 +2366,8 @@ class ClassChange(Item):
         classes.remove(oldPlayer.__class__)
         game.player = random.choice(classes)(oldPlayer.x,oldPlayer.y)
         game.player.coins = oldPlayer.coins
+        game.player.hp = oldPlayer.hp#maxhp
+        game.allies = []
         for i in range(len(oldPlayer.shownItems)):
             clss=list(oldPlayer.shownItems.keys())[i]
             for j in range(oldPlayer.shownItems[clss]):
@@ -2358,6 +2385,13 @@ class Spirality(Item):
 
     def pickup(self):
         game.player.spirality+=1
+class JesterHat(Item):
+    price=16
+    imageSize = 128
+    image = loadTexture("items/jesterhat.png", imageSize)
+
+    def pickup(self):
+        game.allies.append(Jester(self.x,self.y))
 # class ProjectileEnlarger(Item):
 #     price=14
 #     imageSize = 128
@@ -2367,7 +2401,7 @@ class Spirality(Item):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite]
+goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat]
 badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality]
 allItems=goodItems+badItems
 roomPresets=[
@@ -2426,6 +2460,8 @@ roomPresets=[
     ],], # Test Room
 
     [[
+    createWallF(lambda :random.randint(200,game.room.roomSize[0]-200),lambda :random.randint(100,game.room.roomSize[1]-100),60,90, occurance=0.3),
+    createWallF(lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(200,game.room.roomSize[1]-200),lambda :random.randint(60,200),60, occurance=0.3),
     ],[
     createF([Robot],400,400,depth=2),
     createF([Animus],200,lambda :random.randint(200,game.room.roomSize[1]-200)),
@@ -2438,6 +2474,10 @@ roomPresets=[
     ],], # Ellas Room
 
     [[
+    createWallF(50,40,90,60, occurance=0.3),
+    createWallF(400,50,90,90, occurance=0.3),
+    createWallF(30,470,60,80, occurance=0.3),
+    createWallF(450,450,90,90, occurance=0.3),
     ],[
     createF([Chest],250,250),
     createF([Schmitt,Sledger],250,250,depth=4),
@@ -2447,7 +2487,6 @@ roomPresets=[
     createF([Animus,Pufferfish, Skull],200,350,depth=2),
     createF([Animus,Pufferfish, Skull],300,350,depth=2),
     ],[
-    #createF(allItems,600,350),
     ],], # Pentagon
 
     [[
@@ -2462,10 +2501,13 @@ roomPresets=[
     createF([Robot],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.5),
     ]*2,
     [
-    #createF(allItems,600,350),
     ],], # Laser Room
 
     [[
+    createWallF(lambda :random.randint(100,400),lambda :random.randint(100,400),lambda :random.randint(20,100),lambda :random.randint(20,100), occurance=0.5),
+    createWallF(lambda :random.randint(100,400),lambda :random.randint(100,400),lambda :random.randint(20,100),lambda :random.randint(20,100), occurance=0.5),
+    createWallF(lambda :random.randint(100,400),lambda :random.randint(100,400),lambda :random.randint(20,100),lambda :random.randint(20,100), occurance=0.5),
+    createWallF(lambda :random.randint(100,400),lambda :random.randint(100,400),lambda :random.randint(20,100),lambda :random.randint(20,100), occurance=0.5),
     ],[
     createF([Skull,Tnt],250,250,occurance=0.5),
     createF([Saw],50,50, depth=2),
@@ -2559,7 +2601,7 @@ roomPresets=[
     createF([Statue,Tnt],420,420, occurance=0.6),
     createF([Mercenary],250,250, depth = 3),
     ],[
-    ],], # Duel
+    ],], # 12: Duel
 
     [[
     createWallF(260,140,300,40),
@@ -2572,7 +2614,24 @@ roomPresets=[
     createF([Tnt],80,80, occurance=0.4),
     ],[
     createF([Coin],430,430),
-    ],], # Portal
+    ],], # Portals
+
+    [[
+    createWallF(250,200,120,20),
+    createWallF(200,250,20,120),
+    createWallF(300,300,220,20, depth=2),
+    createWallF(400,200,20,220, depth=2),
+    createWallF(250,100,320,20, depth=3),
+    createWallF(100,250,20,320, depth=4),
+    createWallF(300,400,420,20, depth=5),
+    ],[
+    createF([Portal],250,250),
+    createF([Tnt],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.5),
+    createF([Tnt],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.5),
+    createF([Hjuldjurplant],lambda :random.randint(100,400),lambda :random.randint(100,400), occurance=0.5),
+    ],[
+    createF([Coin],430,430, depth=5),
+    ],], # Portal spiral
 
 ]
 

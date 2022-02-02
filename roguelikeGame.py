@@ -57,6 +57,9 @@ class Sound():
     cashSound.set_volume(volume*0.2)
     glassSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "glass.wav"))
     glassSound.set_volume(volume*0.2)
+    playedHorrorSound = False
+    horrorSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "panic.wav"))
+    horrorSound.set_volume(volume*0.5)
     
     pygame.mixer.music.load(os.path.join(SOUND_PATH, "Age of War.wav")) #must be wav 16bit and stuff?
     pygame.mixer.music.set_volume(volume*0.05)
@@ -612,6 +615,10 @@ class Player():
     def hurt(self, damage=1):
         self.image = self.hurtImage
         self.hp-=damage
+        if self.hp <= 0:
+            if not Sound.playedHorrorSound:
+                Sound.horrorSound.play()
+                Sound.playedHorrorSound = True
         self.invincibility = 60
         self.state = -1
         self.stateTimer = 0
@@ -1245,10 +1252,17 @@ class Animus(Enemy):
 
         #ATTACK
         if self.state == 0:
-            target = game.findPlayer(self.x, self.y, 16)
-            if target:
-                target.hurt()
+            if self.hp<2 and random.random()<0.001:
                 game.remove(self,game.room.enemies)
+                port = Portal(self.x,self.y)
+                game.room.enemies.append(port)
+                port.coins = self.coins
+                port.state = 2
+            else:
+                target = game.findPlayer(self.x, self.y, 16)
+                if target:
+                    target.hurt()
+                    game.remove(self,game.room.enemies)
 class Pufferfish(Enemy):
 
     radius = 8
@@ -1833,6 +1847,8 @@ class Portal(Enemy):
     imageSize = 128
     idleImage = loadTexture("enemies/portal/portal.png", imageSize)
     spawnImage = loadTexture("enemies/portal/portal2.png", imageSize)
+    transform1Image = loadTexture("enemies/portal/preportal1.png", imageSize)
+    transform2Image = loadTexture("enemies/portal/preportal2.png", imageSize)
 
     def __init__(self, x, y):
         super().__init__(x,y)
@@ -1869,6 +1885,17 @@ class Portal(Enemy):
             elif self.stateTimer>300:
                 self.image = self.idleImage
                 self.state = 0
+
+        #TRANSFORM
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer<50:
+                self.image = self.transform1Image
+            elif self.stateTimer<100:
+                self.image = self.transform2Image
+            elif self.stateTimer==100:
+                self.state = 0
+                self.image = self.idleImage
 class Tnt(Enemy):
 
     radius = 32
@@ -2440,7 +2467,7 @@ class Carpet(Item):
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,FireRope,Carpet]
 badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality]
-allItems=[Carpet]#goodItems+badItems
+allItems=goodItems+badItems
 roomPresets=[
     [[
     createWallF(100,100,190,160, occurance=0.3),

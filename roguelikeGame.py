@@ -4,6 +4,8 @@ import random
 import os
 import math
 
+EZ = 1
+
 # sacker man kan göra at göra
 """
 bättre boss?
@@ -405,6 +407,9 @@ class Player():
     hiteffectImage = loadTexture("player/hiteffect.png",128)
     fireHiteffectImage = loadTexture("player/firehiteffect.png",128)
 
+    burningImage = loadTexture("enemies/fire.png", 128)
+    frozenImage = loadTexture("enemies/ice.png", 128)
+
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -414,12 +419,13 @@ class Player():
         self.ydir = 0
         self.fakeX = x #det de tror
         self.fakeY = y
-        self.maxhp = 3
-        self.hp = 3
+        self.maxhp = 3+7*EZ
+        self.hp = 3+7*EZ
         self.state = 0 #0:idle, 1:atak, 2:roll, (hitstun??)
         self.stateTimer = 0
         self.invincibility = 0
         self.invisibility = 0
+        self.burning = 0
         self.image = self.idleImage
         self.imageDir = 1
 
@@ -459,11 +465,17 @@ class Player():
     def edge(self, verticalWall=False):
         pass
 
+    def fire(self,duration=30):
+        self.burning = max(self.burning, duration)
+
     def update(self):
         pressed = pygame.key.get_pressed()
 
         if self.invincibility>0:
             self.invincibility-=1
+        if(self.burning>0):
+            self.hurt(0.02)
+            self.burning-=1
         elif self.invisibility:
             if random.random()<0.02:
                 self.fakeX = random.randint(100, game.room.roomSize[0])
@@ -547,7 +559,7 @@ class Player():
         dx = (pressed[pygame.K_d] or pressed[pygame.K_RIGHT]) - (pressed[pygame.K_a] or pressed[pygame.K_LEFT])
         dy = (pressed[pygame.K_s] or pressed[pygame.K_DOWN]) - (pressed[pygame.K_w] or pressed[pygame.K_UP])
         if dx or dy: #do movement in direction and anim
-            if dx:
+            if dx and self.state==0:
                 self.imageDir = (dx+1)//2
             if dx and dy:
                 dx, dy = dx*0.707, dy*0.707
@@ -559,8 +571,9 @@ class Player():
                 self.xv += dx*speed *(0.05*(self.carpet+2))
                 self.yv += dy*speed *(0.05*(self.carpet+2))
                 self.image = self.walkImages[0]
-            self.xdir = dx
-            self.ydir = dy
+            if self.state==0:
+                self.xdir = dx
+                self.ydir = dy
         else:
             self.image = self.idleImage
 
@@ -610,15 +623,16 @@ class Player():
         self.hp = min(self.hp+damage, self.maxhp)
 
     def hurt(self, damage=1):
-        self.image = self.hurtImage
         self.hp-=damage
-        self.invincibility = 60
-        self.state = -1
-        self.stateTimer = 0
-        if self.iceBody:
-            targets = game.findEnemies(self.x, self.y, self.radius*self.iceBody*2)
-            for target in targets:
-                target.freeze()
+        if damage>0.1:
+            self.image = self.hurtImage
+            self.invincibility = 60
+            self.state = -1
+            self.stateTimer = 0
+            if self.iceBody:
+                targets = game.findEnemies(self.x, self.y, self.radius*self.iceBody*2)
+                for target in targets:
+                    target.freeze()
 
     def draw(self):
         shakeX = random.randint(-2*self.furyBuff,2*self.furyBuff)
@@ -627,8 +641,10 @@ class Player():
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
         
         # YOU
-        if self.carpet:
-            gameDisplay.blit(Carpet.images[random.randint(0,1)], (int(pos[0]) - Carpet.imageSize//2, int(pos[1]+16) - Carpet.imageSize//2))
+        if self.burning>0:
+            gameDisplay.blit(self.burningImage, (int(pos[0]) - 128//2, int(pos[1]) - 128//2))
+        for i in range(self.carpet):
+            gameDisplay.blit(Carpet.images[random.randint(0,1)], (int(pos[0]) - Carpet.imageSize//2, int(pos[1]+16+8*i) - Carpet.imageSize//2))
         if self.stateTimer%2==0 or not (self.invincibility or self.invisibility):
             gameDisplay.blit(self.image[self.imageDir], (pos[0] - self.imageSize//2, pos[1]-8 - self.imageSize//2))
         if self.iceBody:
@@ -891,12 +907,12 @@ class Thief(Player):
                 if self.fanRoll:
                     targets = game.findEnemies(self.x,self.y,self.radius*self.fanRoll)
                     for target in targets:
-                        target.x-=self.xdir*self.fanRoll
-                        target.y-=self.ydir*self.fanRoll
+                        target.x+=self.xdir*self.fanRoll
+                        target.y+=self.ydir*self.fanRoll
                     targets = game.findProjectiles(self.x,self.y,self.radius*self.fanRoll)
                     for target in targets:
-                        target.xv=-self.xdir*self.fanRoll
-                        target.yv=-self.ydir*self.fanRoll
+                        target.xv=self.xdir*self.fanRoll
+                        target.yv=self.ydir*self.fanRoll
             elif self.stateTimer>=30:
                 self.invisibility = not self.invisibility
                 self.fakeX = self.x
@@ -1438,18 +1454,18 @@ class Schmitt(Enemy):
 
         #ATTACK
         if self.state == 1:
-            self.basicMove()
             self.stateTimer+=1
             if self.stateTimer==1:
+                self.basicMove()
                 self.image = self.attackImages[0]
-            elif self.stateTimer==50:
+            elif self.stateTimer==35:
                 self.image = self.attackImages[1]
                 target = game.findPlayer(self.x+self.xdir*16, self.y+self.xdir*16, 64)
                 if target:
                     target.hurt()
-            elif self.stateTimer==60:
+            elif self.stateTimer==40:
                 self.image = self.idleImage
-            elif self.stateTimer>=90:
+            elif self.stateTimer>=80:
                 self.image = self.idleImage
                 self.state = 0
 
@@ -1478,14 +1494,25 @@ class Skull(Enemy):
         self.image = self.idleImage
         self.maxhp = 1
         self.hp = 1
-        self.movementSpeed = -1
-        self.invincibility = 30
+        self.xv = 0
+        self.yv = 0
+        self.invincibility = 20
 
     def update(self):
         if self.state == 0:
-            self.basicMove()
-            if not game.player.invisibility:
-                self.movementSpeed+=0.01
+            target = game.player
+            x = target.fakeX
+            y = target.fakeY
+            hyp = math.sqrt((x-self.x)**2+(y-self.y)**2)
+            if hyp>0:
+                self.xdir = (x-self.x)/hyp
+                self.ydir = (y-self.y)/hyp
+                self.xv+=0.05*self.xdir*self.movementSpeed
+                self.yv+=0.05*self.ydir*self.movementSpeed
+                self.x+=self.xv
+                self.y+=self.yv
+            self.xv*=0.99
+            self.yv*=0.99
 
         super().update()
 
@@ -1508,7 +1535,7 @@ class Saw(Enemy):
         self.image = self.idleImage
         self.maxhp = 1
         self.hp = 1
-        self.movementSpeed = 3
+        self.movementSpeed = 2
         self.a = random.random()*6.28
         self.xdir = math.cos(self.a)
         self.ydir = math.sin(self.a)
@@ -1635,6 +1662,43 @@ class Svamp(Enemy):
                 game.room.projectiles.append(Spore(self.x, self.y, dx, dy, self))
             elif self.stateTimer>30:
                 self.state = 0
+class BlazeSpitter(Enemy):
+
+    radius = 24
+    imageSize = 128
+    idleImage = loadTexture("enemies/blazespitter/blazespitter.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.maxhp = 2
+        self.hp = 2
+        self.coins = 1
+
+    def update(self):
+        super().update()
+
+        #IDLE
+        if self.state == 0:
+            self.image = self.idleImage
+            if random.random()<0.02:
+                self.state = 1
+                self.stateTimer = 0
+
+        # SHOOT
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer==1:
+                a = random.random()*6.28
+                dx = math.cos(a)*2
+                dy = math.sin(a)*2
+                game.room.projectiles.append(Firering(self.x, self.y, dx, dy))
+            elif self.stateTimer>30:
+                self.state = 0
+
+    def die(self):
+        super().die()
+        #game.room.enemies.append(Hjuldjurplant(self.x,self.y-8))
 class Hjuldjurplant(Enemy):
 
     radius = 24
@@ -1837,8 +1901,8 @@ class Portal(Enemy):
     def __init__(self, x, y):
         super().__init__(x,y)
         self.image = self.idleImage
-        self.maxhp = 6
-        self.hp = 6
+        self.maxhp = 4
+        self.hp = 4
         self.coins = 3
 
     def update(self):
@@ -1846,7 +1910,7 @@ class Portal(Enemy):
         
         #IDLE
         if self.state == 0:
-            if random.random()<0.1:
+            if random.random()<0.05:
                 self.state = 1
                 self.stateTimer = 0
 
@@ -2036,6 +2100,22 @@ class Projectile():
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
 
+class Firering(Projectile):
+
+    evil = True
+    radius = 16
+    imageSize = 128
+    imagePath="enemies/blazespitter/firering.png"
+    image = loadTexture("enemies/blazespitter/firering.png", imageSize)
+
+    def update(self):
+        super().update()
+
+        # HIT PLAYER
+        if game.findPlayer(self.x, self.y, self.radius):
+            #game.player.hurt()
+            game.player.fire(30)
+            game.remove(self,game.room.projectiles)
 class Missile(Projectile):
 
     evil = True
@@ -2234,7 +2314,7 @@ class StairCase(Item):
         game.player.x = self.x
         game.player.y = self.y
         game.gatherAllies()
-        for i in range(game.player.coins*game.player.piggyBank//2):
+        for i in range(min(50, game.player.coins*game.player.piggyBank//2)):
             game.room.items.append(Coin(random.randint(100,400),random.randint(100,400)))
         
 class Coin(Item):
@@ -2271,6 +2351,9 @@ class Stick(Item):
 
     def pickup(self):
         game.player.swipeRange+=30
+        if hasattr(game.player, "maxAmmo"):
+            game.player.maxAmmo+=1
+            game.player.ammo+=1
 class Fan(Item):
     price=6
     imageSize = 128
@@ -2284,7 +2367,7 @@ class Heart(Item):
     image = loadTexture("items/heart.png", imageSize)
     showItem=False
     def pickup(self):
-        game.player.heal(1)
+        game.player.heal(1+1*EZ)
 class Icecrystal(Item):
     price=17
     imageSize = 64
@@ -2440,7 +2523,7 @@ class Carpet(Item):
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,FireRope,Carpet]
 badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality]
-allItems=[Carpet]#goodItems+badItems
+allItems=goodItems+badItems
 roomPresets=[
     [[
     createWallF(100,100,190,160, occurance=0.3),
@@ -2468,8 +2551,8 @@ roomPresets=[
     createF([Sledger,Schmitt],250,200,depth=3),
     createF([Pufferfish,Tnt],200,250,occurance=0.4),
     createF([Pufferfish,Tnt],300,250,occurance=0.4),
-    createF([Hjuldjurplant,Svamp],300,350,occurance=0.3, depth=4),
-    createF([Hjuldjurplant,Svamp],200,350,occurance=0.3, depth=4),
+    createF([Hjuldjurplant,BlazeSpitter,Svamp],300,350,occurance=0.3, depth=4),
+    createF([Hjuldjurplant,BlazeSpitter,Svamp],200,350,occurance=0.3, depth=4),
     ],[
     createF([Fruit],250,350,occurance=0.3),
     ],], # Test Room
@@ -2604,7 +2687,7 @@ roomPresets=[
     ]*2+[
     createF([Tnt],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),occurance=0.5),
     ]*4+[
-    createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
+    createF([Svamp,Hjuldjurplant,BlazeSpitter],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=2),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=3),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=4),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),lambda :random.randint(100,game.room.roomSize[1]-100),depth=5),
@@ -2618,13 +2701,13 @@ roomPresets=[
     createWallF(120,300,40,140, occurance=0.5),
     createWallF(380,200,40,140, occurance=0.5),
     ],[
-    createF([Hjuldjurplant],140,70),
+    createF([Hjuldjurplant,BlazeSpitter],140,70),
     createF([Hjuldjur],70,70, depth=5, occurance=0.5),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),70, depth=2, occurance=0.5),
     createF([Schmitt, Sledger, SkuggVarg],250,250, depth = 4),
     createF([Svamp],lambda :random.randint(100,game.room.roomSize[0]-100),430, depth=2, occurance=0.5),
     createF([Hjuldjur],430,430, depth=5, occurance=0.5),
-    createF([Hjuldjurplant],360,430),
+    createF([Hjuldjurplant,BlazeSpitter],360,430),
     ],[
     createF([Coin],70,70),
     createF([Coin],430,430),
@@ -2633,8 +2716,8 @@ roomPresets=[
     [[
     ],[
     createF([Statue,Tnt],80,80, occurance=0.6),
-    createF([Statue,Tnt],420,80, occurance=0.6),
-    createF([Statue,Tnt],80,420, occurance=0.6),
+    createF([Statue,Tnt,BlazeSpitter],420,80, depth=5, occurance=0.6),
+    createF([Statue,Tnt,BlazeSpitter],80,420, depth=5, occurance=0.6),
     createF([Statue,Tnt],420,420, occurance=0.6),
     createF([Mercenary],250,250, depth = 3),
     ],[
@@ -2645,7 +2728,7 @@ roomPresets=[
     createWallF(lambda :random.randint(150,350),360,300,40),
     createWallF(130,250,40,260, occurance=0.5),
     ],[
-    createF([Hjuldjurplant],420,80, depth=4),
+    createF([Hjuldjurplant,BlazeSpitter],420,80, depth=4),
     createF([Portal],250,250, depth=2),
     createF([Portal],80,420, depth=4),
     createF([Tnt],80,80, occurance=0.4),

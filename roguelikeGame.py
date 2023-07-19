@@ -59,6 +59,9 @@ class Sound():
     cashSound.set_volume(volume*0.2)
     glassSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "glass.wav"))
     glassSound.set_volume(volume*0.2)
+    playedHorrorSound = False
+    horrorSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "panic.wav"))
+    horrorSound.set_volume(volume*0.5)
     
     pygame.mixer.music.load(os.path.join(SOUND_PATH, "Age of War.wav")) #must be wav 16bit and stuff?
     pygame.mixer.music.set_volume(volume*0.05)
@@ -149,7 +152,7 @@ class Floor():
     def __init__(self,presets):
         self.shopPosition = (0,0)
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
+            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Hjuldjurplant],350,300),],[]],[0,0]) # first room is empty
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
         for i in range(boost): #boost
@@ -625,6 +628,10 @@ class Player():
     def hurt(self, damage=1):
         self.hp-=damage
         if damage>0.1:
+            if self.hp <= 0:
+                if not Sound.playedHorrorSound:
+                    Sound.horrorSound.play()
+                    Sound.playedHorrorSound = True
             self.image = self.hurtImage
             self.invincibility = 60
             self.state = -1
@@ -1244,6 +1251,7 @@ class Animus(Enemy):
         self.image = self.idleImage
         self.maxhp = 2
         self.hp = 2
+        self.transformationCharger = 0 # for less variance in time
 
     def update(self):
         if self.state == 0:
@@ -1261,10 +1269,19 @@ class Animus(Enemy):
 
         #ATTACK
         if self.state == 0:
-            target = game.findPlayer(self.x, self.y, 16)
-            if target:
-                target.hurt()
-                game.remove(self,game.room.enemies)
+            if self.hp<2 and random.random()<0.01:
+                self.transformationCharger+=1
+                if self.transformationCharger>5:
+                    game.remove(self,game.room.enemies)
+                    port = Portal(self.x,self.y)
+                    game.room.enemies.append(port)
+                    port.coins = self.coins
+                    port.state = 2
+            else:
+                target = game.findPlayer(self.x, self.y, 16)
+                if target:
+                    target.hurt()
+                    game.remove(self,game.room.enemies)
 class Pufferfish(Enemy):
 
     radius = 8
@@ -1477,7 +1494,7 @@ class Schmitt(Enemy):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         # SWIPE
         if self.state == 1:
-            if 50<=self.stateTimer<=51:
+            if 35<=self.stateTimer<40:
                 x = int(pos[0]+self.xdir*16)
                 y = int(pos[1]+self.ydir*16)
                 #blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
@@ -1674,6 +1691,7 @@ class BlazeSpitter(Enemy):
         self.maxhp = 2
         self.hp = 2
         self.coins = 1
+        self.transformationCharger = 0
 
     def update(self):
         super().update()
@@ -1681,9 +1699,15 @@ class BlazeSpitter(Enemy):
         #IDLE
         if self.state == 0:
             self.image = self.idleImage
-            if random.random()<0.02:
+            if random.random()<0.05:
                 self.state = 1
                 self.stateTimer = 0
+                self.transformationCharger += 1
+            if random.random()<0.05 and self.transformationCharger>5:
+                game.remove(self,game.room.enemies)
+                plant = Hjuldjurplant(self.x,self.y)
+                game.room.enemies.append(plant)
+                plant.state = 2
 
         # SHOOT
         if self.state == 1:
@@ -1704,6 +1728,8 @@ class Hjuldjurplant(Enemy):
     radius = 24
     imageSize = 64
     idleImage = loadTexture("enemies/hjuldjur/hjuldjurplant.png", imageSize)
+    transform1Image = loadTexture("enemies/hjuldjur/transform1.png", imageSize)
+    transform2Image = loadTexture("enemies/hjuldjur/transform2.png", imageSize)
 
     def __init__(self, x, y):
         super().__init__(x,y)
@@ -1712,11 +1738,41 @@ class Hjuldjurplant(Enemy):
         self.hp = 2
         self.coins = 0
         self.harmless = True
+        self.transformationCharger = 0
 
     def update(self):
         super().update()
 
         # IDLE
+        if self.state == 0:
+            if random.random()<0.01:
+                self.transformationCharger+=1
+                if self.transformationCharger>5:
+                    self.state = 1
+                    self.stateTimer = 0
+
+        #TRANSFORM
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer<20:
+                self.image = self.transform1Image
+            elif self.stateTimer<40:
+                self.image = self.transform2Image
+            elif self.stateTimer==40:
+                game.remove(self,game.room.enemies)
+                blaze = BlazeSpitter(self.x,self.y)
+                game.room.enemies.append(blaze)
+
+        #TRANSFORM BACK
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer<20:
+                self.image = self.transform2Image
+            elif self.stateTimer<40:
+                self.image = self.transform1Image
+            elif self.stateTimer==40:
+                self.image = self.idleImage
+                self.state = 0
 
     def die(self):
         super().die()
@@ -1732,13 +1788,19 @@ class Hjuldjur(Enemy):
         self.maxhp = 2
         self.hp = 2
         self.movementSpeed=2
-        self.invincibility = 30
+        self.invincibility = 20
+        self.scared = 60
+
+    def hurt(self,damage=None):
+        super().hurt(damage)
+        self.scared = 60
 
     def update(self):
         if self.state==0:
             if self.hp<=1:
                 self.basicMove(spdMult=-1)
-            elif self.invincibility:
+            elif self.scared:
+                self.scared-=1
                 self.basicMove(spdMult=-0.5)
             else:
                 self.basicMove()
@@ -1897,6 +1959,8 @@ class Portal(Enemy):
     imageSize = 128
     idleImage = loadTexture("enemies/portal/portal.png", imageSize)
     spawnImage = loadTexture("enemies/portal/portal2.png", imageSize)
+    transform1Image = loadTexture("enemies/portal/preportal1.png", imageSize)
+    transform2Image = loadTexture("enemies/portal/preportal2.png", imageSize)
 
     def __init__(self, x, y):
         super().__init__(x,y)
@@ -1904,6 +1968,7 @@ class Portal(Enemy):
         self.maxhp = 4
         self.hp = 4
         self.coins = 3
+        self.transformationCharger = 0 # for tranformation back to animus
 
     def update(self):
         super().update()
@@ -1913,6 +1978,9 @@ class Portal(Enemy):
             if random.random()<0.05:
                 self.state = 1
                 self.stateTimer = 0
+            elif random.random()<0.5 and self.transformationCharger>5:
+                self.state = 3
+                self.stateTimer = 0
 
         #SPAWN
         if self.state == 1:
@@ -1920,8 +1988,9 @@ class Portal(Enemy):
             if 60<self.stateTimer<150:
                 self.image = random.choice((self.idleImage, self.spawnImage))
             elif self.stateTimer==150:
+                self.transformationCharger += 1
                 self.image = self.idleImage
-                enemy = random.choice([Animus, Pufferfish, SkuggVarg, Skull])(self.x,self.y)
+                enemy = random.choice([Animus, Pufferfish, SkuggVarg, Skull, Hjuldjur])(self.x,self.y)
                 game.room.enemies.append(enemy)
                 if self.coins>=enemy.coins: #transfer coins
                     self.coins-=enemy.coins
@@ -1933,6 +2002,31 @@ class Portal(Enemy):
             elif self.stateTimer>300:
                 self.image = self.idleImage
                 self.state = 0
+
+        #TRANSFORM
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer<50:
+                self.image = self.transform1Image
+            elif self.stateTimer<100:
+                self.image = self.transform2Image
+            elif self.stateTimer==100:
+                self.state = 0
+                self.image = self.idleImage
+
+        #TRANSFORM BACK
+        if self.state == 3:
+            self.stateTimer+=1
+            if self.stateTimer<30:
+                self.image = self.transform2Image
+            elif self.stateTimer<60:
+                self.image = self.transform1Image
+            elif self.stateTimer==60:
+                game.remove(self, game.room.enemies)
+                mus = Animus(self.x,self.y)
+                game.room.enemies.append(mus)
+                mus.coins = self.coins
+                mus.state = 0
 class Tnt(Enemy):
 
     radius = 32
@@ -2191,7 +2285,8 @@ class Emerald(Projectile):
         # HIT ENEMIES
         targets =  game.findEnemies(self.x, self.y, self.radius)
         for target in targets:
-            pass
+            if hasattr(target, "movementSpeed"):
+                target.movementSpeed *= 0.5
         if targets:
             game.remove(self,game.room.projectiles)
 class Bullet(Projectile):

@@ -446,7 +446,8 @@ class Player():
         self.freezeDamage=0
         self.freezeTime=60
         self.attackDamage=1
-        self.fireSword=0
+        self.fireSword = 0
+        self.magicWand = 0
         self.magnet = 0
         self.piggyBank = 0
         self.fireStar = 0
@@ -579,6 +580,8 @@ class Player():
                 self.ydir = dy
         else:
             self.image = self.idleImage
+        self.dx = dx
+        self.dy = dy
 
     def applyAttackEffects(self, targets):
         alreadyHit=[]
@@ -652,10 +655,14 @@ class Player():
             gameDisplay.blit(self.burningImage, (int(pos[0]) - 128//2, int(pos[1]) - 128//2))
         for i in range(self.carpet):
             gameDisplay.blit(Carpet.images[random.randint(0,1)], (int(pos[0]) - Carpet.imageSize//2, int(pos[1]+16+8*i) - Carpet.imageSize//2))
+        if self.freezeDamage:
+            gameDisplay.blit(ColdCore.image, (int(pos[0]) - ColdCore.imageSize//2, int(pos[1]) - ColdCore.imageSize//2))
         if self.stateTimer%2==0 or not (self.invincibility or self.invisibility):
             gameDisplay.blit(self.image[self.imageDir], (pos[0] - self.imageSize//2, pos[1]-8 - self.imageSize//2))
         if self.iceBody:
             gameDisplay.blit(IceShield.image, (int(pos[0]+8-16*self.imageDir) - IceShield.imageSize//2, int(pos[1]+8) - IceShield.imageSize//2))
+        if JesterHat in self.shownItems:
+            gameDisplay.blit(JesterHat.image, (int(pos[0]) - JesterHat.imageSize//2, int(pos[1]-32) - JesterHat.imageSize//2))
     def drawPlayerUI(self):
         #hp
         pygame.draw.rect(gameDisplay, (200,0,0),(30,30,150,30))
@@ -2135,12 +2142,16 @@ class Boss(Enemy):
         print("you win")
 
 class Projectile():
+
+    magicglowImage = loadTexture("projectiles/magicglow.png", 64)
+
     def __init__(self, x, y, xv, yv):
         self.x = x
         self.y = y
         self.xv = xv
         self.yv = yv
         self.bounces = 0
+        self.magicglow = 0
         if not self.evil:
             self.bounces = game.player.projBounces
     def changeSize(self,multiplier):
@@ -2168,6 +2179,9 @@ class Projectile():
             self.xv = math.cos(self.a)*hyp
             self.yv = math.sin(self.a)*hyp
 
+        if game.player.magicWand:# and not self.evil:
+            self.xv += game.player.magicWand * game.player.dx * 0.02
+            self.yv += game.player.magicWand * game.player.dy * 0.02
 
         if(self.x>game.room.roomSize[0]):
             self.edge(verticalWall=True)
@@ -2192,6 +2206,8 @@ class Projectile():
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        if game.player.magicWand:
+            gameDisplay.blit(self.magicglowImage, (int(pos[0]) - 64//2, int(pos[1]) - 64//2))
         gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
 
 class Firering(Projectile):
@@ -2236,6 +2252,8 @@ class Missile(Projectile):
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        if game.player.magicWand:
+            gameDisplay.blit(self.magicglowImage, (int(pos[0]) - 64//2, int(pos[1]) - 64//2))
         blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2,self.imageSize//2), self.a+math.pi)#slow
 class Sapphire(Projectile):
 
@@ -2513,6 +2531,13 @@ class FireSword(Item):
 
     def pickup(self):
         game.player.fireSword+=1    
+class MagicWand(Item):
+    price=12
+    imageSize = 128
+    image = loadTexture("items/magicwand.png", imageSize)
+
+    def pickup(self):
+        game.player.magicWand+=1    
 class Magnet(Item):
     price=3
     imageSize = 128
@@ -2616,8 +2641,8 @@ class Carpet(Item):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-goodItems=[PiggyBank,FireStar,ShockLink,FireSword,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,FireRope,Carpet]
-badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality]
+goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,FireRope,Carpet]
+badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,JesterHat]
 allItems=goodItems+badItems
 roomPresets=[
     [[

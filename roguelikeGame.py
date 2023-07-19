@@ -1039,8 +1039,8 @@ class Jester(Ally):
             if self.xdir>0:
                 self.facing=1
 
-            game.player.fakeX = self.x
-            game.player.fakeY = self.y
+        game.player.fakeX = self.x
+        game.player.fakeY = self.y
 
         super().update()
 class FireSpirit(Ally):
@@ -1872,6 +1872,9 @@ class Portal(Enemy):
             if random.random()<0.1:
                 self.state = 1
                 self.stateTimer = 0
+            if random.random()<0.05 and self.coins==0:
+                self.state = 2
+                self.stateTimer = 0
 
         #SPAWN
         if self.state == 1:
@@ -2316,6 +2319,8 @@ class Stick(Item):
 
     def pickup(self):
         game.player.swipeRange+=30
+        if hasattr(game.player,"maxAmmo"):
+            game.player.maxAmmo+=1
 class Fan(Item):
     price=6
     imageSize = 128
@@ -2490,8 +2495,8 @@ class Carpet(Item):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,FireRope,Carpet]
-badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,JesterHat]
+goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet]
+badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,FireRope]
 allItems=goodItems+badItems
 roomPresets=[
     [[

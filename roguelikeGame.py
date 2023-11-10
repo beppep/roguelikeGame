@@ -291,10 +291,10 @@ class Room():
             item.draw()
         for ally in game.allies:
             ally.draw()
-        for proj in self.projectiles:
-            proj.draw()
         for enemy in self.enemies:
             enemy.draw()
+        for proj in self.projectiles:
+            proj.draw()
     def drawRoomUI(self):
         for e in self.enemies:
             if isinstance(e,Boss): #bad code?
@@ -2126,11 +2126,14 @@ class Boss(Enemy):
     def __init__(self, x, y):
         super().__init__(x,y)
         self.image = self.idleImage
-        self.maxhp = 32
-        self.hp = 32
+        self.maxhp = 50
+        self.hp = 50
         self.movementSpeed = 0.1
         self.coins = 0
         self.arms = 8
+
+    def freeze(self):
+        pass
 
     def update(self):
         super().update()
@@ -2365,7 +2368,7 @@ class Emerald(Projectile):
         targets =  game.findEnemies(self.x, self.y, self.radius)
         for target in targets:
             if hasattr(target, "movementSpeed"):
-                target.movementSpeed *= 0.5
+                target.movementSpeed *= 0.3
         if targets:
             game.remove(self,game.room.projectiles)
 class Bullet(Projectile):
@@ -2952,7 +2955,7 @@ while jump_out == False:
     clock.tick(60)
     
 pygame.quit()
-quit() #remove for pyinstaller
+#quit() #remove for pyinstaller
 
 #ddddddddd         ddddddddd            aa  bssssss  
 #aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD

@@ -29,7 +29,9 @@ healer
 clock = pygame.time.Clock()
 filepath="roguelikeGameFiles"
 SOUND_PATH = os.path.join(filepath, "sounds")
-display = (1280,720)
+pygame.init()
+info = pygame.display.Info() # You have to call this before pygame.display.set_mode()
+display = (info.current_w,info.current_h)
 gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
 gameDisplay.blit(pygame.image.load(os.path.join(filepath, "textures", "loading.png")),(0,0))
 pygame.display.update()
@@ -759,9 +761,9 @@ class Warrior(Player):
                 self.image = self.attackImages[1]
                 if self.stateTimer % 5 == 0:
                     self.xdir, self.ydir = self.ydir, -self.xdir
-                    attackX = self.x+self.xdir*self.swipeRange
-                    attackY = self.y+self.ydir*self.swipeRange
-                    targets = game.findEnemies(attackX, attackY, 30)#+self.swipeRange*0.6)
+                    attackX = self.x+self.xdir*(self.swipeRange+30)*0.5
+                    attackY = self.y+self.ydir*(self.swipeRange+30)*0.5
+                    targets = game.findEnemies(attackX, attackY, 20)#+self.swipeRange*0.6)
                     self.applyAttackEffects(targets)
             elif self.stateTimer>=60:
                 self.state = 0
@@ -789,8 +791,8 @@ class Warrior(Player):
         # SPIN
         if self.state == 3:
             if 15<=self.stateTimer<=35:
-                x = int(pos[0]+self.xdir*self.swipeRange*0.6)
-                y = int(pos[1]+self.ydir*self.swipeRange*0.6)
+                x = int(pos[0]+self.xdir*(self.swipeRange+30)*0.5)
+                y = int(pos[1]+self.ydir*(self.swipeRange+30)*0.5)
                 if not self.fireSword:
                     image = self.swipeImage
                 else:
@@ -891,13 +893,19 @@ class Ranger(Player):
                 targets = game.findEnemies(self.x,self.y,100)
                 for target in targets:
                     hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2+1) #add 1 for fun #also to not divide by 0
-                    target.x += (target.x-self.x)/hyp*10
-                    target.y += (target.y-self.y)/hyp*10
+                    ang = math.atan2((target.y-self.y),(target.x-self.x))
+                    target.knockback = 4+self.fanRoll*4
+                    target.knockbackAngle = ang
+                    target.a = ang
+                    target.xv = (target.x-self.x)/hyp*(self.fanRoll+1)
+                    target.yv = (target.y-self.y)/hyp*(self.fanRoll+1)
+                    target.xdir = (target.x-self.x)/hyp
+                    target.ydir = (target.y-self.y)/hyp
                 targets = game.findProjectiles(self.x,self.y,100)
                 for target in targets:
                     hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2+1)
-                    target.xv = (target.x-self.x)/hyp
-                    target.yv = (target.y-self.y)/hyp
+                    target.xv = (target.x-self.x)/hyp*(self.fanRoll+1)
+                    target.yv = (target.y-self.y)/hyp*(self.fanRoll+1)
             elif self.stateTimer>=40:
                 self.state = 0
 
@@ -1582,8 +1590,8 @@ class Skull(Enemy):
             if hyp>0:
                 self.xdir = (x-self.x)/hyp
                 self.ydir = (y-self.y)/hyp
-                self.xv+=0.05*self.xdir*self.movementSpeed
-                self.yv+=0.05*self.ydir*self.movementSpeed
+                self.xv+=0.03*self.xdir*self.movementSpeed
+                self.yv+=0.03*self.ydir*self.movementSpeed
                 self.x+=self.xv
                 self.y+=self.yv
             self.xv*=0.99
@@ -2048,7 +2056,7 @@ class Portal(Enemy):
             elif self.stateTimer==150:
                 self.transformationCharger += 1
                 self.image = self.idleImage
-                enemy = random.choice([Animus, Pufferfish, SkuggVarg, Skull, Hjuldjur])(self.x,self.y)
+                enemy = random.choice([Animus, Pufferfish, Svamp, Skull, Hjuldjur])(self.x,self.y)
                 game.room.enemies.append(enemy)
                 if self.coins>=enemy.coins: #transfer coins
                     self.coins-=enemy.coins

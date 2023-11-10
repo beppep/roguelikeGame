@@ -148,11 +148,13 @@ def createWallF(x,y,w,h,occurance=1, depth=1):
 class Floor():
 
     groundImage = loadTexture(f"ground{random.randint(1,3)}.png",16*32,16*32).convert()
+    tutorialGroundImage = loadTexture("tutorialGround.png",16*32,16*32).convert()
 
     def __init__(self,presets):
         self.shopPosition = (0,0)
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Hjuldjurplant],350,300),],[]],[0,0]) # first room is empty
+            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
+            self.startRoom.tutorialRoom = True
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
         for i in range(boost): #boost
@@ -217,6 +219,7 @@ class Room():
         self.doorWidth=30
         self.locked = 0
         self.harmlessRoom = False
+        self.tutorialRoom = False
         
     def loadRoom(self):
         if(not self.alreadyLoaded):
@@ -276,7 +279,10 @@ class Room():
         roomCorner=((display[0]-self.roomSize[0])/2,(display[1]-self.roomSize[1])/2)
         pygame.draw.rect(gameDisplay,[100,80,50],[*roomCorner,*self.roomSize])#self.roomSize[0],self.roomSize[1]])
         #
-        gameDisplay.blit(game.floor.groundImage,roomCorner)
+        if self.tutorialRoom:
+            gameDisplay.blit(game.floor.tutorialGroundImage,roomCorner)
+        else:
+            gameDisplay.blit(game.floor.groundImage,roomCorner)
         for wall in self.walls:
             wall.draw()
         for item in self.items:
@@ -741,9 +747,22 @@ class Warrior(Player):
 
         # ???
         if self.state == 3:
-            self.image = self.rollImages[1]
+            self.basicMove(spdMult=0)
             self.stateTimer+=1
-            if self.stateTimer>=20:
+            if self.stateTimer<15:
+                pressed = pygame.key.get_pressed()
+                if pressed[pygame.K_e] or pressed[pygame.K_l]:
+                    self.stateTimer-=1
+                self.image = self.attackImages[0]
+            elif self.stateTimer < 35:
+                self.image = self.attackImages[1]
+                if self.stateTimer % 5 == 0:
+                    self.xdir, self.ydir = self.ydir, -self.xdir
+                    attackX = self.x+self.xdir*self.swipeRange
+                    attackY = self.y+self.ydir*self.swipeRange
+                    targets = game.findEnemies(attackX, attackY, 30)#+self.swipeRange*0.6)
+                    self.applyAttackEffects(targets)
+            elif self.stateTimer>=60:
                 self.state = 0
 
         if(self.furyTime>0):
@@ -766,12 +785,22 @@ class Warrior(Player):
                 else:
                     image = self.fireSwipeImage
                 blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
+        # SPIN
+        if self.state == 3:
+            if 15<=self.stateTimer<=35:
+                x = int(pos[0]+self.xdir*self.swipeRange*0.6)
+                y = int(pos[1]+self.ydir*self.swipeRange*0.6)
+                if not self.fireSword:
+                    image = self.swipeImage
+                else:
+                    image = self.fireSwipeImage
+                blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
         super().draw()
     def getKill(self,enemy):
         super().getKill(enemy)
         if(self.furyTime>0):
             self.furyBuff+=0.5
-        self.furyTime=150
+        self.furyTime=180
 class Ranger(Player):
     radius = 16
     imageSize = 128
@@ -2456,7 +2485,7 @@ class Fruit(Item):
     image = loadTexture("items/fruit.png", imageSize)
     
     def pickup(self):
-        game.player.movementSpeed+=0.5
+        game.player.movementSpeed+=0.8
 class Stick(Item):
     price=8
     imageSize = 128

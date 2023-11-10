@@ -383,7 +383,7 @@ class Wall():
         self.width = width
         self.height = height
 
-    def adjust(self, other, proj=0):
+    def adjust(self, other):#, proj=0):
         dx = self.width//2+other.radius
         dy = self.height//2+other.radius
         if self.x-dx < other.x < self.x+dx:
@@ -398,13 +398,14 @@ class Wall():
                 else:
                     dy = other.y - (self.y+dy)
 
-                if abs(dx)<abs(dy): # (abs slow?)
+                if dx*dx<dy*dy: # (abs slow?)
                     other.x-=dx
                     other.edge(verticalWall=True)
+                    return "x"
                 else:
                     other.y-=dy
                     other.edge(verticalWall=False)
-                return True
+                    return "y"
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -660,7 +661,7 @@ class Player():
         if self.burning>0:
             gameDisplay.blit(self.burningImage, (int(pos[0]) - 128//2, int(pos[1]) - 128//2))
         for i in range(self.carpet):
-            gameDisplay.blit(Carpet.images[random.randint(0,1)], (int(pos[0]) - Carpet.imageSize//2, int(pos[1]+16+8*i) - Carpet.imageSize//2))
+            gameDisplay.blit(Carpet.images[random.randint(0,1)], (int(pos[0]) - Carpet.imageSize//2, int(pos[1]+16+8*(self.carpet-i-1)) - Carpet.imageSize//2))
         if self.freezeDamage:
             gameDisplay.blit(ColdCore.image, (int(pos[0]) - ColdCore.imageSize//2, int(pos[1]) - ColdCore.imageSize//2))
         if self.stateTimer%2==0 or not (self.invincibility or self.invisibility):
@@ -897,7 +898,7 @@ class Ranger(Player):
                     hyp = math.sqrt((target.x-self.x)**2+(target.y-self.y)**2+1)
                     target.xv = (target.x-self.x)/hyp
                     target.yv = (target.y-self.y)/hyp
-            elif self.stateTimer>=30:
+            elif self.stateTimer>=40:
                 self.state = 0
 
     def draw(self):
@@ -1084,8 +1085,8 @@ class Jester(Ally):
             if self.xdir>0:
                 self.facing=1
 
-            game.player.fakeX = self.x
-            game.player.fakeY = self.y
+        game.player.fakeX = self.x
+        game.player.fakeY = self.y
 
         super().update()
 class FireSpirit(Ally):
@@ -1131,6 +1132,8 @@ class Enemy():
         self.y = y
         self.xdir = 1
         self.ydir = 0
+        self.knockback = 0
+        self.knockbackAngle = 0
         self.state = 0 # -2 frozen, -1:hurt, 0:idle
         self.stateTimer = 0
         self.movementSpeed = 1
@@ -1156,6 +1159,12 @@ class Enemy():
     def edge(self, verticalWall=False):
         pass
     def update(self):
+
+        if self.knockback>0:
+            self.x += math.cos(self.knockbackAngle)*self.knockback
+            self.y += math.sin(self.knockbackAngle)*self.knockback
+            self.knockback -= 1
+
         if(self.x>game.room.roomSize[0]):
             self.x=game.room.roomSize[0]
             self.xdir*=-1
@@ -1215,9 +1224,14 @@ class Enemy():
 
     def heal(self, damage):
         self.hp = min(self.hp+damage, self.maxhp)
-    def hurt(self,damage=None):
+    def hurt(self,damage=None,knockback=None,attacker=None):
         if(damage==None):
             damage=game.player.attackDamage
+        if knockback==None:
+            self.knockback = damage*8
+            if attacker==None:
+                attacker = game.player
+            self.knockbackAngle = math.atan2(self.y - attacker.y, self.x - attacker.x)
         if damage>0.3:
             random.choice(Sound.hitSounds).play()
             pos=((display[0]-game.room.roomSize[0])/2+self.x-64, (display[1]-game.room.roomSize[1])/2+self.y-64)           
@@ -1524,7 +1538,10 @@ class Schmitt(Enemy):
 
     def die(self):
         super().die()
-        game.room.enemies.append(Skull(self.x,self.y-20))
+        myHead = Skull(self.x,self.y-20)
+        myHead.xv = math.cos(self.knockbackAngle)*self.knockback
+        myHead.yv = math.sin(self.knockbackAngle)*self.knockback
+        game.room.enemies.append(myHead)
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -1550,7 +1567,12 @@ class Skull(Enemy):
         self.xv = 0
         self.yv = 0
         self.invincibility = 20
-
+    
+    def edge(self, verticalWall=False):
+        if verticalWall:
+            self.xv = 0
+        else:
+            self.yv = 0
     def update(self):
         if self.state == 0:
             target = game.player
@@ -2204,13 +2226,15 @@ class Projectile():
         if game.player.spirality:
             hyp = math.sqrt(self.xv**2+self.yv**2)
             self.a = math.atan2(self.yv,self.xv)
-            self.a+=0.01*game.player.spirality
+            self.a+=0.02*game.player.spirality
             self.xv = math.cos(self.a)*hyp
             self.yv = math.sin(self.a)*hyp
 
         if game.player.magicWand:# and not self.evil:
-            self.xv += game.player.magicWand * game.player.dx * 0.02
-            self.yv += game.player.magicWand * game.player.dy * 0.02
+            self.xv += game.player.magicWand * game.player.dx * 0.05
+            self.yv += game.player.magicWand * game.player.dy * 0.05
+            self.xv *= 0.99
+            self.yv *= 0.99
 
         if(self.x>game.room.roomSize[0]):
             self.edge(verticalWall=True)
@@ -2222,7 +2246,7 @@ class Projectile():
             self.edge(verticalWall=False)
 
         for wall in game.room.walls:
-            wall.adjust(self, proj=1)
+            wall.adjust(self)
 
     def edge(self, verticalWall=False):
         if verticalWall:
@@ -2480,14 +2504,14 @@ class Coin(Item):
             self.x += (target.x-self.x)/hyp*game.player.magnet
             self.y += (target.y-self.y)/hyp*game.player.magnet
 class Fruit(Item):
-    price=12
+    price=8
     imageSize = 128
     image = loadTexture("items/fruit.png", imageSize)
     
     def pickup(self):
         game.player.movementSpeed+=0.8
 class Stick(Item):
-    price=8
+    price=11
     imageSize = 128
     image = loadTexture("items/stick.png", imageSize)
 
@@ -2511,21 +2535,21 @@ class Heart(Item):
     def pickup(self):
         game.player.heal(1+1*EZ)
 class Icecrystal(Item):
-    price=17
+    price=15
     imageSize = 64
     image = loadTexture("items/icecrystal.png", imageSize)
 
     def pickup(self):
         game.player.icecrystal+=3
 class Crystal(Item):
-    price=14
+    price=12
     imageSize = 64
     image = loadTexture("items/crystal.png", imageSize)
 
     def pickup(self):
         game.player.crystal+=3
 class Mosscrystal(Item):
-    price=1
+    price=10
     imageSize = 64
     image = loadTexture("items/mosscrystal.png", imageSize)
 
@@ -2554,21 +2578,21 @@ class ColdCore(Item):
         game.player.freezeDamage+=1
         game.player.freezeTime+=30
 class FireSword(Item):
-    price=15
+    price=12
     imageSize = 128
     image = loadTexture("items/firesword.png", imageSize)
 
     def pickup(self):
         game.player.fireSword+=1    
 class MagicWand(Item):
-    price=12
+    price=16
     imageSize = 128
     image = loadTexture("items/magicwand.png", imageSize)
 
     def pickup(self):
         game.player.magicWand+=1    
 class Magnet(Item):
-    price=3
+    price=5
     imageSize = 128
     image = loadTexture("items/magnet.png", imageSize)
 
@@ -2633,7 +2657,7 @@ class ClassChange(Item):
                     else:
                         game.player.shownItems[clss]=1
 class Spirality(Item):
-    price=7
+    price=4
     imageSize = 128
     image = loadTexture("items/spirality.png", imageSize)
 
@@ -2670,8 +2694,8 @@ class Carpet(Item):
 #         for proj in [Sapphire,Ruby,Emerald,Bullet]:
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,FireRope,Carpet]
-badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,JesterHat]
+goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet]
+badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,FireRope]
 allItems=goodItems+badItems
 roomPresets=[
     [[

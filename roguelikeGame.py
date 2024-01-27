@@ -765,6 +765,8 @@ class Warrior(Player):
                     attackY = self.y+self.ydir*(self.swipeRange+30)*0.5
                     targets = game.findEnemies(attackX, attackY, 20)#+self.swipeRange*0.6)
                     self.applyAttackEffects(targets)
+            elif self.stateTimer<60:
+                self.image = self.attackImages[1]
             elif self.stateTimer>=60:
                 self.state = 0
 
@@ -2142,10 +2144,10 @@ class Boss(Enemy):
         if self.state == 0:
             self.image = self.idleImage
             self.basicMove()
-            if random.random()<0.01:
+            if random.random()<0.02:
                 self.state = 2
                 self.stateTimer = 0
-            if random.random()<0.05:
+            if random.random()<0.06:
                 self.state = 3
                 self.stateTimer = 0
             if random.random()<0.02:
@@ -2194,7 +2196,7 @@ class Boss(Enemy):
     
     def drawUI(self):
         scale = 20
-        pygame.draw.rect(gameDisplay, (200,0,0), (display[0]//2 - 32//2*scale, display[1]-50-32, scale*self.hp, 32))
+        pygame.draw.rect(gameDisplay, (200,0,0), (display[0]//2 - self.maxhp//2*scale, display[1]-50-32, scale*self.hp, 32))
         
     def die(self):
         super().die()

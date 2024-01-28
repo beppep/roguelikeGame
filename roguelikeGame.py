@@ -463,6 +463,7 @@ class Player():
         self.shockLink = 0
         self.spirality = 0
         self.carpet = 0
+        self.library = 0
 
         self.furyBuff=0 # Only Warrior
         self.furyTime=0 # Only Warrior
@@ -678,15 +679,18 @@ class Player():
         if self.hp>0:
             pygame.draw.rect(gameDisplay, (0,200,0),(30,30,150*(self.hp/self.maxhp)**1.1, 30))
         #items
+        item_vertical_spacing = 50
+        item_horizontal_spacing = 20
         for i in range(len(self.shownItems)):
             clss=list(self.shownItems.keys())[i]
-            for j in range(self.shownItems[clss]):
-                gameDisplay.blit(clss.image,(50+20*j-clss.imageSize/2,100+50*i-clss.imageSize/2))
-            """
-            if(self.shownItems[clss]>1):
-                textsurface = myfont.render("x"+str(self.shownItems[clss]) , False, (0, 0, 0))
-                gameDisplay.blit(textsurface,(60,110+35*i))
-            """
+            number_of_copies = self.shownItems[clss]
+            for j in range(number_of_copies):
+                gameDisplay.blit(clss.image,(50+item_horizontal_spacing*j-clss.imageSize/2,100+item_vertical_spacing*i-clss.imageSize/2))
+            
+            if self.library>0:#(self.shownItems[clss]>0):
+                textsurface = myfont.render(clss.libraryString, False, (0, 0, 0))
+                gameDisplay.blit(textsurface,(90+j*item_horizontal_spacing,90+item_vertical_spacing*i))
+            
         #text
         textsurface = myfont.render("floor: "+str(game.depth) , False, (0, 0, 0))
         gameDisplay.blit(textsurface,(display[0]-150,200))
@@ -2517,6 +2521,7 @@ class Coin(Item):
             self.x += (target.x-self.x)/hyp*game.player.magnet
             self.y += (target.y-self.y)/hyp*game.player.magnet
 class Fruit(Item):
+    libraryString = "Hasty Snack"
     price=8
     imageSize = 128
     image = loadTexture("items/fruit.png", imageSize)
@@ -2524,6 +2529,7 @@ class Fruit(Item):
     def pickup(self):
         game.player.movementSpeed+=0.8
 class Stick(Item):
+    libraryString = "Long Stick"
     price=11
     imageSize = 128
     image = loadTexture("items/stick.png", imageSize)
@@ -2534,6 +2540,7 @@ class Stick(Item):
             game.player.maxAmmo+=1
             game.player.ammo+=1
 class Fan(Item):
+    libraryString = "Windy Fan Thingy"
     price=6
     imageSize = 128
     image = loadTexture("items/fan.png", imageSize)
@@ -2548,6 +2555,7 @@ class Heart(Item):
     def pickup(self):
         game.player.heal(1+1*EZ)
 class Icecrystal(Item):
+    libraryString = "Frost Crystal"
     price=15
     imageSize = 64
     image = loadTexture("items/icecrystal.png", imageSize)
@@ -2555,6 +2563,7 @@ class Icecrystal(Item):
     def pickup(self):
         game.player.icecrystal+=3
 class Crystal(Item):
+    libraryString = "Fire Crystal"
     price=12
     imageSize = 64
     image = loadTexture("items/crystal.png", imageSize)
@@ -2562,6 +2571,7 @@ class Crystal(Item):
     def pickup(self):
         game.player.crystal+=3
 class Mosscrystal(Item):
+    libraryString = "Moss Crystal"
     price=10
     imageSize = 64
     image = loadTexture("items/mosscrystal.png", imageSize)
@@ -2569,6 +2579,7 @@ class Mosscrystal(Item):
     def pickup(self):
         game.player.mosscrystal+=3
 class Bouncer(Item):
+    libraryString = "Bounce"
     price=9
     imageSize = 128
     image = loadTexture("items/bouncer.png", imageSize)
@@ -2576,6 +2587,7 @@ class Bouncer(Item):
     def pickup(self):
         game.player.projBounces+=1
 class IceShield(Item):
+    libraryString = "Ice Shield"
     price=6
     imageSize = 128
     image = loadTexture("items/iceShield.png", imageSize)
@@ -2583,6 +2595,7 @@ class IceShield(Item):
     def pickup(self):
         game.player.iceBody+=2
 class ColdCore(Item):
+    libraryString = "Shattering Ice"
     price=16
     imageSize = 128
     image = loadTexture("items/coldcore.png", imageSize)
@@ -2591,6 +2604,7 @@ class ColdCore(Item):
         game.player.freezeDamage+=1
         game.player.freezeTime+=30
 class FireSword(Item):
+    libraryString = "Fire Sword"
     price=12
     imageSize = 128
     image = loadTexture("items/firesword.png", imageSize)
@@ -2598,6 +2612,7 @@ class FireSword(Item):
     def pickup(self):
         game.player.fireSword+=1    
 class MagicWand(Item):
+    libraryString = "Magic Wand"
     price=16
     imageSize = 128
     image = loadTexture("items/magicwand.png", imageSize)
@@ -2605,6 +2620,7 @@ class MagicWand(Item):
     def pickup(self):
         game.player.magicWand+=1    
 class Magnet(Item):
+    libraryString = "Coin Magnet"
     price=5
     imageSize = 128
     image = loadTexture("items/magnet.png", imageSize)
@@ -2612,6 +2628,7 @@ class Magnet(Item):
     def pickup(self):
         game.player.magnet+=1
 class PiggyBank(Item):
+    libraryString = "Life Savings"
     price=20
     imageSize = 128
     image = loadTexture("items/piggybank.png", imageSize)
@@ -2619,6 +2636,7 @@ class PiggyBank(Item):
     def pickup(self):
         game.player.piggyBank+=1
 class FireStar(Item):
+    libraryString = "Intense Fire"
     price=15
     imageSize = 128
     image = loadTexture("items/firestar.png", imageSize)
@@ -2626,6 +2644,7 @@ class FireStar(Item):
     def pickup(self):
         game.player.fireStar+=1
 class ShockLink(Item):
+    libraryString = "Shock Link"
     price=16
     imageSize = 128
     image = loadTexture("items/shocklink.png", imageSize)
@@ -2633,6 +2652,7 @@ class ShockLink(Item):
     def pickup(self):
         game.player.shockLink+=1
 class WaterFace(Item):
+    libraryString = "the Water Spirit"
     price=16
     imageSize = 128
     image = loadTexture("items/waterspirit.png", imageSize)
@@ -2640,6 +2660,7 @@ class WaterFace(Item):
     def pickup(self):
         game.allies.append(WaterSpirit(self.x,self.y))
 class VampireBite(Item):
+    libraryString = "Vampire"
     price=20
     imageSize = 128
     image = loadTexture("items/vampirebite.png", imageSize)
@@ -2647,6 +2668,7 @@ class VampireBite(Item):
     def pickup(self):
         game.player.lifeSteal+=0.1
 class ClassChange(Item):
+    libraryString = "Class Change"
     price=10
     imageSize = 128
     image = loadTexture("items/classchange.png", imageSize)
@@ -2670,6 +2692,7 @@ class ClassChange(Item):
                     else:
                         game.player.shownItems[clss]=1
 class Spirality(Item):
+    libraryString = "Spirality"
     price=4
     imageSize = 128
     image = loadTexture("items/spirality.png", imageSize)
@@ -2677,6 +2700,7 @@ class Spirality(Item):
     def pickup(self):
         game.player.spirality+=1
 class JesterHat(Item):
+    libraryString = "the Jester"
     price=16
     imageSize = 128
     image = loadTexture("items/jesterhat.png", imageSize)
@@ -2684,6 +2708,7 @@ class JesterHat(Item):
     def pickup(self):
         game.allies.append(Jester(self.x,self.y))
 class FireRope(Item):
+    libraryString = "the Eternal Flame"
     price=13
     imageSize = 128
     image = loadTexture("items/firerope.png", imageSize)
@@ -2691,6 +2716,7 @@ class FireRope(Item):
     def pickup(self):
         game.allies.append(FireSpirit(self.x,self.y))
 class Carpet(Item):
+    libraryString = "Magic Carpet"
     price=19
     imageSize = 128
     image = loadTexture("items/carpet.png", imageSize)
@@ -2698,6 +2724,14 @@ class Carpet(Item):
 
     def pickup(self):
         game.player.carpet+=1
+class Library(Item):
+    libraryString = "the Little Library"
+    price=3
+    imageSize = 128
+    image = loadTexture("items/library.png", imageSize)
+
+    def pickup(self):
+        game.player.library+=1
 # class ProjectileEnlarger(Item):
 #     price=14
 #     imageSize = 128
@@ -2708,7 +2742,7 @@ class Carpet(Item):
 #             proj(0,0,0,0).changeSize(2)
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet]
-badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,FireRope]
+badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,FireRope,Library]
 allItems=goodItems+badItems
 roomPresets=[
     [[

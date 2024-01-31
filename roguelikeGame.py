@@ -302,7 +302,7 @@ class Room():
 class Game():
 
     def __init__(self):
-        self.player = random.choice([Warrior,Ranger,Thief])(250,250)
+        self.player = random.choice(allClasses)(250,250)
         self.allies = []
         self.room = None
         self.floor = None
@@ -464,6 +464,7 @@ class Player():
         self.spirality = 0
         self.carpet = 0
         self.library = 0
+        self.projectileSize = 1
 
         self.furyBuff=0 # Only Warrior
         self.furyTime=0 # Only Warrior
@@ -836,7 +837,10 @@ class Ranger(Player):
                 if(self.ammo>0):
                     Sound.shotSound.play()
                     self.image = self.attackImages[0]
-                    game.room.projectiles.append(Bullet(self.x, self.y, self.xdir*8, self.ydir*8))
+                    if self.fireSword:
+                        game.room.projectiles.append(FireBullet(self.x, self.y, self.xdir*8, self.ydir*8))
+                    else:
+                        game.room.projectiles.append(Bullet(self.x, self.y, self.xdir*8, self.ydir*8))
                     self.ammo-=1
                 else:
                     self.state=0
@@ -844,9 +848,9 @@ class Ranger(Player):
             self.stateTimer+=1
             if self.stateTimer<3:
                 self.image = self.attackImages[0]
-            elif self.stateTimer<30:
+            elif self.stateTimer<25:
                 self.image = self.attackImages[1]
-            elif self.stateTimer>=30:
+            elif self.stateTimer>=25:
                 self.state = 0
 
         # RELOAD
@@ -1015,6 +1019,145 @@ class Thief(Player):
                     image = self.fireSwipeImage
                 blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
         super().draw()
+class Mage(Player):
+    imageSize = 128
+    idleImage = loadTexture("player/mage/player.png", imageSize, mirror=True)
+    hurtImage = loadTexture("player/mage/hurt.png", imageSize, mirror=True)
+    walkImages = [loadTexture("player/mage/walk1.png", imageSize, mirror=True), loadTexture("player/mage/walk2.png", imageSize, mirror=True)]
+    attackImages = [loadTexture("player/mage/attack1.png", imageSize, mirror=True), loadTexture("player/mage/attack2.png", imageSize, mirror=True)]
+    tpImages = [loadTexture("player/mage/teleport1.png", imageSize, mirror=True),loadTexture("player/mage/teleport2.png", imageSize, mirror=True)]
+    magicImages = [loadTexture("player/mage/magic.png", imageSize, mirror=True),loadTexture("player/mage/magic2.png", imageSize, mirror=True)]
+
+    def __init__(self, x,y):
+        super().__init__(x,y)
+        self.mana = 0
+        self.maxmana = 10
+        self.MANAMECHANIC = False
+
+    def update(self):
+        super().update()
+        pressed = pygame.key.get_pressed()
+        if self.MANAMECHANIC:
+            if game.room.harmlessRoom:
+                self.mana += 0.05
+            else:
+                self.mana += 0.02
+            self.mana = min(self.mana, self.maxmana)
+        
+
+        # ATTACK
+        if self.state == 1:
+            self.stateTimer+=1
+            if self.stateTimer==1 and self.MANAMECHANIC:
+                if self.mana < 2:
+                    self.state = 0
+                else:
+                    self.mana -= 2
+            else:
+                self.basicMove(spdMult=0.5)
+                if self.stateTimer<10:
+                    self.image = self.attackImages[0]
+                elif self.stateTimer == 10:
+                    self.image = self.attackImages[1]
+                    attackX = self.x+self.xdir*self.swipeRange
+                    attackY = self.y+self.ydir*self.swipeRange
+                    if self.fireSword:
+                        game.room.projectiles.append(FireOrb(self.x, self.y - 8, self.xdir*3+self.xv, self.ydir*3+self.yv))
+                    else:
+                        game.room.projectiles.append(Orb(self.x, self.y - 8, self.xdir*3+self.xv, self.ydir*3+self.yv))
+
+                elif self.stateTimer<40:
+                    self.image = self.attackImages[1]
+                elif self.stateTimer<45:
+                    self.image = self.attackImages[0]
+                elif self.stateTimer<50:
+                    self.image = self.idleImage
+                else:
+                    self.state = 0
+
+        # TELEPORT
+        if self.state == 2:
+            self.stateTimer+=1
+            if self.stateTimer==1 and self.MANAMECHANIC:
+                if self.mana < 5:
+                    self.state = 0
+                else:
+                    self.mana -= 5
+            else:
+                if self.stateTimer<10:
+                    self.basicMove(spdMult=0.5)
+                    self.image = self.tpImages[0]
+                elif self.stateTimer<20:
+                    self.image = self.tpImages[1]
+                elif self.stateTimer==20:
+                    self.image = self.tpImages[1]
+                    tp_distance = 100
+                    safe_guard = 40
+                    self.x += self.xdir*tp_distance
+                    self.y += self.ydir*tp_distance
+                    self.x = max(self.x, safe_guard)
+                    self.y = max(self.y, safe_guard)
+                    self.x = min(self.x, game.room.roomSize[0]-safe_guard)
+                    self.y = min(self.y, game.room.roomSize[1]-safe_guard)
+                elif self.stateTimer<30:
+                    self.image = self.tpImages[1]
+                elif self.stateTimer<40:
+                    self.basicMove(spdMult=0.5)
+                    self.image = self.tpImages[0]
+                elif self.stateTimer<45:
+                    self.basicMove(spdMult=0.5)
+                    self.image = self.idleImage
+                elif self.stateTimer>=45:
+                    self.state = 0
+
+        # SCARE
+        if self.state == 3:
+            self.stateTimer+=1
+            if self.stateTimer==1 and self.MANAMECHANIC:
+                if self.mana < 5:
+                    self.state = 0
+                else:
+                    self.mana -= 5
+            else:
+                self.basicMove(spdMult=0.5)
+                if self.stateTimer==10:
+                    targets = game.findEnemies(self.x, self.y, 300)
+                    #target = random.choice(targets)
+                    for target in targets:
+                        target.scared = 40
+                if self.stateTimer<5:
+                    self.image = self.attackImages[0]
+                elif self.stateTimer<55:
+                    self.image = self.magicImages[(self.stateTimer//10)%2]
+
+                    # fanRoll
+                    if self.fanRoll:
+                        targets = game.findEnemies(self.x,self.y,self.radius*self.fanRoll)
+                        for target in targets:
+                            target.x+=self.xdir*self.fanRoll
+                            target.y+=self.ydir*self.fanRoll
+                        targets = game.findProjectiles(self.x,self.y,self.radius*self.fanRoll)
+                        for target in targets:
+                            target.xv=self.xdir*self.fanRoll
+                            target.yv=self.ydir*self.fanRoll
+                elif self.stateTimer<60:
+                    self.image = self.attackImages[0]
+                elif self.stateTimer>=60:
+                    self.state = 0
+
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        #pygame.draw.circle(gameDisplay, (200,100,100), (self.x+self.xdir*self.swipeRange, self.y+self.ydir*self.swipeRange), 30)
+        super().draw()
+
+    def drawPlayerUI(self):
+        super().drawPlayerUI()
+        if self.MANAMECHANIC:
+            w = 150
+            pygame.draw.rect(gameDisplay, (0,100,100),((display[0]-w)//2, 30, w, 30))
+            pygame.draw.rect(gameDisplay, (0,200,200),((display[0]-w)//2, 30, w*(self.mana/self.maxmana), 30))
+
+allClasses = [Warrior,Ranger,Thief,Mage]
 
 class Ally():
 
@@ -1154,6 +1297,7 @@ class Enemy():
         self.invincibility= 0
         self.burning = 0
         self.harmless = False
+        self.scared = 0
         self.coins = 1
     def die(self):
         game.player.getKill(self)
@@ -1173,6 +1317,10 @@ class Enemy():
     def edge(self, verticalWall=False):
         pass
     def update(self):
+
+
+        if self.scared>0:
+            self.scared-=1
 
         if self.knockback>0:
             self.x += math.cos(self.knockbackAngle)*self.knockback
@@ -1211,6 +1359,8 @@ class Enemy():
             self.invincibility-=1
 
     def basicMove(self,spdMult=1,target=None):
+        if self.scared:
+            spdMult=-1
         if target==None:
             target=game.player
         if target == game.player:
@@ -1276,8 +1426,8 @@ class Chest(Enemy):
         self.hp = 1
         self.lootTable = allItems
         self.harmless = True
-    def fire(*a):
-        pass
+    #def fire(*a):
+     #   pass
     def freeze(*a):
         pass
     def update(self):
@@ -1553,8 +1703,8 @@ class Schmitt(Enemy):
     def die(self):
         super().die()
         myHead = Skull(self.x,self.y-20)
-        myHead.xv = math.cos(self.knockbackAngle)*self.knockback
-        myHead.yv = math.sin(self.knockbackAngle)*self.knockback
+        myHead.xv = math.cos(self.knockbackAngle)*self.knockback*0.1
+        myHead.yv = math.sin(self.knockbackAngle)*self.knockback*0.1
         game.room.enemies.append(myHead)
 
     def draw(self):
@@ -1594,6 +1744,8 @@ class Skull(Enemy):
             y = target.fakeY
             hyp = math.sqrt((x-self.x)**2+(y-self.y)**2)
             if hyp>0:
+                if self.scared:
+                    hyp = -hyp
                 self.xdir = (x-self.x)/hyp
                 self.ydir = (y-self.y)/hyp
                 self.xv+=0.03*self.xdir*self.movementSpeed
@@ -1859,7 +2011,7 @@ class Hjuldjur(Enemy):
         self.image = self.idleImage
         self.maxhp = 2
         self.hp = 2
-        self.movementSpeed=2
+        self.movementSpeed=1.5
         self.invincibility = 20
         self.scared = 60
 
@@ -1871,9 +2023,6 @@ class Hjuldjur(Enemy):
         if self.state==0:
             if self.hp<=1:
                 self.basicMove(spdMult=-1)
-            elif self.scared:
-                self.scared-=1
-                self.basicMove(spdMult=-0.5)
             else:
                 self.basicMove()
             self.x += random.randint(-1,1)
@@ -2211,6 +2360,7 @@ class Boss(Enemy):
 
 class Projectile():
 
+    drawAngled = False
     magicglowImage = loadTexture("projectiles/magicglow.png", 64)
 
     def __init__(self, x, y, xv, yv):
@@ -2222,10 +2372,12 @@ class Projectile():
         self.magicglow = 0
         if not self.evil:
             self.bounces = game.player.projBounces
-    def changeSize(self,multiplier):
-        self.radius = self.radius*multiplier
-        self.imageSize = int(self.radius*multiplier)
-        self.image = loadTexture(self.imagePath, self.imageSize)
+    @classmethod
+    def changeSize(cls,multiplier):
+        cls.radius = cls.radius*multiplier
+        cls.imageSize = int(cls.imageSize*multiplier)
+        cls.image = loadTexture(cls.imagePath, cls.imageSize)
+        #print("enlarged",cls, cls.imageSize*multiplier)
 
     def update(self):
         self.x+=self.xv
@@ -2278,7 +2430,10 @@ class Projectile():
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
         if game.player.magicWand:
             gameDisplay.blit(self.magicglowImage, (int(pos[0]) - 64//2, int(pos[1]) - 64//2))
-        gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
+        if self.drawAngled:
+            blitRotate(gameDisplay, self.image, (int(pos[0]),int(pos[1])), (self.imageSize//2, self.imageSize//2), math.atan2(-self.yv,-self.xv))
+        else:
+            gameDisplay.blit(self.image, (int(pos[0]) - self.imageSize//2, int(pos[1]) - self.imageSize//2))
 
 class Firering(Projectile):
 
@@ -2298,14 +2453,13 @@ class Firering(Projectile):
             game.remove(self,game.room.projectiles)
 class Missile(Projectile):
 
+    drawAngled = True
     evil = True
     radius = 4
     imageSize = 64
     image = loadTexture("enemies/robot/proj.png", imageSize)
+    drawAngled = True
 
-    def __init__(self, *args):
-        super().__init__(*args)
-        self.a = math.atan2(self.yv,self.xv)
     """
     def update(self):
         super().update()
@@ -2320,11 +2474,6 @@ class Missile(Projectile):
         game.room.projectiles.append(Explosion(self.x,self.y))
         game.remove(self, game.room.projectiles)
 
-    def draw(self):
-        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
-        if game.player.magicWand:
-            gameDisplay.blit(self.magicglowImage, (int(pos[0]) - 64//2, int(pos[1]) - 64//2))
-        blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2,self.imageSize//2), self.a+math.pi)#slow
 class Sapphire(Projectile):
 
     evil = False
@@ -2379,11 +2528,63 @@ class Emerald(Projectile):
             game.remove(self,game.room.projectiles)
 class Bullet(Projectile):
 
+    drawAngled = True
     evil = False
-    radius = 8
+    radius = 4
     imageSize = 128
     imagePath="player/ranger/bullet.png"
     image = loadTexture("player/ranger/bullet.png", imageSize)
+
+    def update(self):
+        super().update()
+
+        # HIT ENEMIES
+        targets =  game.findEnemies(self.x, self.y, self.radius)
+        if targets:
+            game.remove(self,game.room.projectiles)
+        game.player.applyAttackEffects(targets)
+class FireBullet(Projectile):
+
+    drawAngled = True
+    evil = False
+    radius = 4
+    imageSize = 128
+    imagePath="player/ranger/firebullet.png"
+    image = loadTexture("player/ranger/firebullet.png", imageSize)
+
+    def update(self):
+        super().update()
+
+        # HIT ENEMIES
+        targets =  game.findEnemies(self.x, self.y, self.radius)
+        if targets:
+            game.remove(self,game.room.projectiles)
+        game.player.applyAttackEffects(targets)
+class Orb(Projectile):
+
+    drawAngled = True
+    evil = False
+    radius = 8
+    imageSize = 128
+    imagePath="player/mage/bullet.png"
+    image = loadTexture("player/mage/bullet.png", imageSize)
+
+    def update(self):
+        super().update()
+
+        # HIT ENEMIES
+        targets =  game.findEnemies(self.x, self.y, self.radius)
+        if targets:
+            game.remove(self,game.room.projectiles)
+        game.player.applyAttackEffects(targets)
+class FireOrb(Projectile):
+
+    drawAngled = True
+    evil = False
+    radius = 8
+    imageSize = 128
+    imagePath="player/mage/firebullet.png"
+    image = loadTexture("player/mage/firebullet.png", imageSize)
 
     def update(self):
         super().update()
@@ -2446,6 +2647,8 @@ class Explosion(Projectile):
         # HIT ENEMIES
         self.age+=1
         if self.age==1:
+            Sound.hitSounds[0].play()
+
             targets =  game.findEnemies(self.x, self.y, self.radius)
             for target in targets:
                 target.hurt(2.5)
@@ -2675,7 +2878,7 @@ class ClassChange(Item):
 
     def pickup(self):
         oldPlayer = game.player
-        classes = [Warrior,Ranger,Thief]
+        classes = allClasses.copy()
         classes.remove(oldPlayer.__class__)
         game.player = random.choice(classes)(oldPlayer.x,oldPlayer.y)
         game.player.coins = oldPlayer.coins
@@ -2732,16 +2935,19 @@ class Library(Item):
 
     def pickup(self):
         game.player.library+=1
-# class ProjectileEnlarger(Item):
-#     price=14
-#     imageSize = 128
-#     image = loadTexture("items/projectilehologram.png", imageSize)
+class ProjectileEnlarger(Item):
+    libraryString = "Projectile Enlarger"
+    price=14
+    imageSize = 128
+    image = loadTexture("items/projectilehologram.png", imageSize)
 
-#     def pickup(self):
-#         for proj in [Sapphire,Ruby,Emerald,Bullet]:
-#             proj(0,0,0,0).changeSize(2)
+    def pickup(self):
+        game.player.projectileSize += 1
+        for projCls in [Sapphire,Ruby,Emerald,Bullet,FireBullet,Orb,FireOrb]:
+            projCls.changeSize(game.player.projectileSize)
+
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet]
+goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet,ProjectileEnlarger]
 badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,FireRope,Library]
 allItems=goodItems+badItems
 roomPresets=[

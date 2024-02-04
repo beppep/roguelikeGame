@@ -2783,7 +2783,7 @@ class Mosscrystal(Item):
         game.player.mosscrystal+=3
 class Bouncer(Item):
     libraryString = "Bounce"
-    price=9
+    price=13
     imageSize = 128
     image = loadTexture("items/bouncer.png", imageSize)
 
@@ -2808,7 +2808,7 @@ class ColdCore(Item):
         game.player.freezeTime+=30
 class FireSword(Item):
     libraryString = "Fire Sword"
-    price=12
+    price=13
     imageSize = 128
     image = loadTexture("items/firesword.png", imageSize)
 
@@ -2816,7 +2816,7 @@ class FireSword(Item):
         game.player.fireSword+=1    
 class MagicWand(Item):
     libraryString = "Magic Wand"
-    price=16
+    price=15
     imageSize = 128
     image = loadTexture("items/magicwand.png", imageSize)
 
@@ -2832,7 +2832,7 @@ class Magnet(Item):
         game.player.magnet+=1
 class PiggyBank(Item):
     libraryString = "Life Savings"
-    price=20
+    price=14
     imageSize = 128
     image = loadTexture("items/piggybank.png", imageSize)
 
@@ -2848,7 +2848,7 @@ class FireStar(Item):
         game.player.fireStar+=1
 class ShockLink(Item):
     libraryString = "Shock Link"
-    price=16
+    price=20
     imageSize = 128
     image = loadTexture("items/shocklink.png", imageSize)
 
@@ -2864,7 +2864,7 @@ class WaterFace(Item):
         game.allies.append(WaterSpirit(self.x,self.y))
 class VampireBite(Item):
     libraryString = "Vampire"
-    price=20
+    price=17
     imageSize = 128
     image = loadTexture("items/vampirebite.png", imageSize)
 
@@ -2912,7 +2912,7 @@ class JesterHat(Item):
         game.allies.append(Jester(self.x,self.y))
 class FireRope(Item):
     libraryString = "the Eternal Flame"
-    price=13
+    price=12
     imageSize = 128
     image = loadTexture("items/firerope.png", imageSize)
 
@@ -2937,7 +2937,7 @@ class Library(Item):
         game.player.library+=1
 class ProjectileEnlarger(Item):
     libraryString = "Projectile Enlarger"
-    price=14
+    price=10
     imageSize = 128
     image = loadTexture("items/projectilehologram.png", imageSize)
 

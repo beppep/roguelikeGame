@@ -155,7 +155,11 @@ class Floor():
     def __init__(self,presets):
         self.shopPosition = (0,0)
         if game.depth==0:
-            self.startRoom = Room([[createWallF(350,350,150,50),],[createF([Chest],350,300),],[]],[0,0]) # first room is empty
+            self.startRoom = Room([
+                [createWallF(350,350,150,50),],
+            [createF([Chest],350,300),],
+            [],
+            ],[0,0]) # first room is empty
             self.startRoom.tutorialRoom = True
         else:
             self.startRoom = Room([[],[],[]],[0,0]) # first room is empty
@@ -429,6 +433,8 @@ class Player():
         self.yv = 0
         self.xdir = 1 #senaste man tittade
         self.ydir = 0
+        self.dx = 0
+        self.dy = 0
         self.fakeX = x #det de tror
         self.fakeY = y
         self.maxhp = 3+7*EZ
@@ -656,8 +662,8 @@ class Player():
                     target.freeze()
 
     def draw(self):
-        shakeX = random.randint(-2*self.furyBuff,2*self.furyBuff)
-        shakeY = random.randint(-2*self.furyBuff,2*self.furyBuff)
+        shakeX = random.randint(-int(2*self.furyBuff),int(2*self.furyBuff))
+        shakeY = random.randint(-int(2*self.furyBuff),int(2*self.furyBuff))
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x+shakeX),int((display[1]-game.room.roomSize[1])/2+self.y+shakeY))
         #pygame.draw.circle(gameDisplay, (100,100,200), (self.x, self.y), self.radius)
         
@@ -1157,7 +1163,7 @@ class Mage(Player):
             pygame.draw.rect(gameDisplay, (0,100,100),((display[0]-w)//2, 30, w, 30))
             pygame.draw.rect(gameDisplay, (0,200,200),((display[0]-w)//2, 30, w*(self.mana/self.maxmana), 30))
 
-allClasses = [Warrior,Ranger,Thief,Mage]
+allClasses = [Mage] #[Warrior,Ranger,Thief,Mage]
 
 class Ally():
 
@@ -2944,7 +2950,7 @@ class ProjectileEnlarger(Item):
     def pickup(self):
         game.player.projectileSize += 1
         for projCls in [Sapphire,Ruby,Emerald,Bullet,FireBullet,Orb,FireOrb]:
-            projCls.changeSize(game.player.projectileSize)
+            projCls.changeSize(game.player.projectileSize/(game.player.projectileSize-1))
 
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet,ProjectileEnlarger]

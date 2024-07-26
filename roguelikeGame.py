@@ -36,7 +36,7 @@ gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
 gameDisplay.blit(pygame.image.load(os.path.join(filepath, "textures", "loading.png")),(0,0))
 pygame.display.update()
 pygame.display.set_caption("Roguelike Game")
-pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player/warrior", "player.png")))
+pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player", "warrior", "player.png")))
 pygame.font.init()
 #myfont = pygame.font.SysFont('Calibri', 20) #for pyinstaller
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
@@ -168,7 +168,7 @@ class Floor():
         self.rooms=[self.startRoom]
         self.roomPosList=[[0,0]]
         if game.depth==5:  # boss rooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooom!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            bossRoom = Room([[],[createF([Boss],250,150)],[]],[0,-1])
+            bossRoom = Room([[],[createF([Boss,Boss2],250,150)],[]],[0,-1])
             self.startRoom.links[0]=bossRoom
             bossRoom.links[2]=self.startRoom
             self.rooms.append(bossRoom)
@@ -301,7 +301,7 @@ class Room():
             proj.draw()
     def drawRoomUI(self):
         for e in self.enemies:
-            if isinstance(e,Boss): #bad code?
+            if isinstance(e,Boss) or isinstance(e,Boss2): #bad code? yes
                 e.drawUI()
 class Game():
 
@@ -312,24 +312,28 @@ class Game():
         self.floor = None
         self.depth = 0+boost #0
         self.drawFunctionQ=[] # fill it with [drawFunction, frameCountDown]
-
+        Sound.playedHorrorSound = False
+        
     def update(self):
         self.room.update()
         self.player.update()
         for ally in self.allies:
             ally.update()
 
-    def gameOver(self):
-        if isinstance(self.player, Warrior):
-            Ranger.unlocked = True
-        elif isinstance(self.player, Ranger):
-            Thief.unlocked = True
-        elif isinstance(self.player, Thief):
-            Mage.unlocked = True
-        save_save_file()
+    def gameOver(self, lose = False):
+        if not lose:
+            if isinstance(self.player, Warrior):
+                Ranger.unlocked = True
+            elif isinstance(self.player, Ranger):
+                Thief.unlocked = True
+            elif isinstance(self.player, Thief):
+                Mage.unlocked = True
+            save_save_file()
 
         Game.playing_a_run = False
-        winAnimation()
+        for projCls in [Sapphire,Ruby,Emerald,Bullet,FireBullet,Orb,FireOrb]:
+            projCls.changeSize(1/(self.player.projectileSize))
+        winAnimation(lose = lose)
 
     def gatherAllies(self):
         for ally in self.allies:
@@ -532,6 +536,16 @@ class Player():
                 self.stateTimer = 0
 
         # HURT
+        if self.hp <= 0:
+            self.state = -1
+            if not Sound.playedHorrorSound:
+                Sound.horrorSound.play()
+                Sound.playedHorrorSound = True
+                self.deathTimer = 0
+            self.deathTimer += 1
+            if self.deathTimer>122:
+                game.gameOver(lose=True)
+
         if self.state == -1:
             self.stateTimer+=1
             if self.stateTimer>=20:
@@ -660,10 +674,6 @@ class Player():
     def hurt(self, damage=1):
         self.hp-=damage
         if damage>0.1:
-            if self.hp <= 0:
-                if not Sound.playedHorrorSound:
-                    Sound.horrorSound.play()
-                    Sound.playedHorrorSound = True
             self.image = self.hurtImage
             self.invincibility = 60
             self.state = -1
@@ -1464,10 +1474,11 @@ class Enemy():
         hyp = math.sqrt((x-self.x)**2+(y-self.y)**2)
         if hyp == 0:
             return #to not set xdir and ydir to 0 because then they shoot projs that are still
-        self.xdir = (x-self.x)/hyp
-        self.ydir = (y-self.y)/hyp
-        self.x += self.xdir*self.movementSpeed*spdMult
-        self.y += self.ydir*self.movementSpeed*spdMult
+        else:
+            self.xdir = (x-self.x)/hyp
+            self.ydir = (y-self.y)/hyp
+            self.x += self.xdir*self.movementSpeed*spdMult
+            self.y += self.ydir*self.movementSpeed*spdMult
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
@@ -2375,12 +2386,14 @@ class Boss(Enemy):
         self.image = self.idleImage
         self.maxhp = 50
         self.hp = 50
-        self.movementSpeed = 0.1
-        self.coins = 0
+        self.movementSpeed = 0.2
+        self.coins = 10
         self.arms = 8
 
     def freeze(self):
-        pass
+        if game.player.freezeDamage:
+            Sound.glassSound.play()
+            self.hurt(game.player.freezeDamage)
 
     def update(self):
         super().update()
@@ -2432,7 +2445,7 @@ class Boss(Enemy):
 
         #SLEEP
         if self.state == 4:
-            self.heal(0.02)
+            self.heal(0.01)
             self.stateTimer+=1
             if self.stateTimer==20:
                 self.image = self.sleepImage
@@ -2453,6 +2466,212 @@ class Boss(Enemy):
         else:
             game.room.items.append(StairCase2(self.x,self.y))
         print("you win")
+
+class Boss2(Enemy):
+    
+    radius = 24
+    imageSize = 128
+    idleImage = loadTexture("enemies/lord wurm/head.png", imageSize)
+    screamImage = loadTexture("enemies/lord wurm/bite1.png", imageSize)
+    biteImage = loadTexture("enemies/lord wurm/bite2.png", imageSize)
+
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.maxhp = 50
+        self.hp = 50
+        self.movementSpeed = 1
+        self.coins = 5
+        self.tail = Boss2_tail(x, y-10, more_tail = 9)
+        self.tail.head = self
+        self.a = 0
+        self.xv = 0
+        self.yv = 1
+        game.room.enemies.append(self.tail)
+
+    def freeze(self):
+        if game.player.freezeDamage:
+            Sound.glassSound.play()
+            self.hurt(game.player.freezeDamage)
+
+    def basicMove(self, spdMult = 1, target = None):
+        target = game.player
+        x = target.fakeX
+        y = target.fakeY
+        hyp = math.sqrt((x-self.x)**2+(y-self.y)**2)
+        if hyp>0:
+            if self.scared:
+                hyp = -hyp
+            self.xdir = (x-self.x)/hyp
+            self.ydir = (y-self.y)/hyp
+            self.xv+=0.03*self.xdir*self.movementSpeed*spdMult
+            self.yv+=0.03*self.ydir*self.movementSpeed*spdMult
+
+    def update(self):
+        super().update()
+
+        #IDLE
+        if self.state == 0:
+            self.image = self.idleImage
+            self.basicMove()
+            if random.random()<0.06:
+                self.state = 2
+                self.stateTimer = 0
+            if random.random()<0.02:
+                self.state = 3
+                self.stateTimer = 0
+            if random.random()<0.02:
+                self.state = 4
+                self.stateTimer = 0
+
+        self.x+=self.xv
+        self.y+=self.yv
+        self.a = math.atan2(-self.yv,-self.xv)
+        self.xv*=0.99
+        self.yv*=0.99
+
+        # BITE
+        if self.state == 2:
+            self.basicMove(spdMult = 0.8)
+            self.stateTimer+=1
+            if self.stateTimer < 20: # prebite
+                # face correctly
+                #self.moveToTarget()
+                if random.random()<0.02:
+                    pass # collateral damage?
+                self.image = self.screamImage
+            elif self.stateTimer == 20: # bite
+                self.image = self.biteImage
+                displacement = -40
+                target = game.findPlayer(self.x + math.cos(self.a)*displacement, self.y + math.sin(self.a)*displacement, 32)
+                if target:
+                    target.hurt()
+            elif self.stateTimer < 40: # ending lag
+                self.image = self.biteImage
+            else:
+                self.state = 0
+
+        # SHOOT
+        if self.state == 3:
+            self.stateTimer+=1
+            if self.stateTimer<100:
+                self.image = self.idleImage
+                self.basicMove(spdMult = -1)
+            #if self.stateTimer==2:
+             #   Sound.horrorSound.play()
+            elif self.stateTimer<170:
+                self.image = self.idleImage
+                self.basicMove(spdMult = 1)
+            elif self.stateTimer<240: # summon projs
+                self.basicMove(spdMult = 0.5)
+                self.image = self.screamImage
+                #additional arm at u which cant die
+                if random.random()<0.3:
+                    displacement = -40
+                    proj = Firering(self.x+ math.cos(self.a)*displacement, self.y+ math.sin(self.a)*displacement, -math.cos(self.a+random.randint(-2,2)*0.2)*2, -math.sin(self.a+random.randint(-2,2)*0.2)*2)               
+                    game.room.projectiles.append(proj)
+            elif self.stateTimer<250:
+                self.image = self.idleImage
+            else:
+                self.state = 0
+
+        # SAW
+        if self.state == 4:
+            self.stateTimer+=1
+            if self.stateTimer<30:
+                self.image = self.idleImage
+                self.basicMove(spdMult = -0.5)
+            #if self.stateTimer==2:
+             #   Sound.horrorSound.play()
+            elif self.stateTimer==55:# summon saw
+                self.image = self.screamImage
+                displacement = -40
+                saw = Saw(self.x+ math.cos(self.a)*displacement, self.y+ math.sin(self.a)*displacement)
+                game.room.enemies.append(saw)
+                saw.a = self.a + math.pi
+                saw.xdir = math.cos(saw.a)
+                saw.ydir = math.sin(saw.a)
+            elif self.stateTimer<70: 
+                self.basicMove(spdMult = 1)
+                self.image = self.screamImage
+            elif self.stateTimer<100:
+                self.image = self.idleImage
+            else:
+                self.state = 0
+
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        if self.burning>0:
+            gameDisplay.blit(self.burningImage, (int(pos[0]) - 128//2, int(pos[1]) - 128//2))
+        blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2, self.imageSize//2), self.a)
+    
+    def drawUI(self):
+        scale = 20
+        pygame.draw.rect(gameDisplay, (200,0,0), (display[0]//2 - self.maxhp//2*scale, display[1]-50-32, scale*self.hp, 32))
+        
+    def die(self):
+        super().die()
+        game.room.enemies = []
+        pressed = pygame.key.get_pressed()
+        if pressed[pygame.K_b]:
+            game.room.items.append(StairCase(self.x,self.y))
+            game.depth = 0
+        else:
+            game.room.items.append(StairCase2(self.x,self.y))
+        print("you win")
+class Boss2_tail(Enemy):
+    
+    radius = 24
+    imageSize = 128
+    idleImage = loadTexture("enemies/lord wurm/tail.png", imageSize)
+
+    def __init__(self, x, y, more_tail):
+        super().__init__(x,y)
+        self.image = self.idleImage
+        self.maxhp = 50
+        self.hp = 50
+        self.movementSpeed = 0.8
+        self.coins = 1
+        self.a = 0
+        if more_tail:
+            self.tail = Boss2_tail(x, y-10, more_tail = more_tail-1)
+            self.tail.head = self
+            game.room.enemies.append(self.tail)
+
+    def follow(self, other):
+        pos_diff = (self.x - other.x, self.y - other.y)
+        dist_to_other2 = (pos_diff[0]**2 + pos_diff[1]**2)**0.5
+        angle_to_other = math.atan2(pos_diff[1], pos_diff[0])
+        follow_dist = 20
+        if dist_to_other2 > follow_dist:
+            shorten_factor = follow_dist / dist_to_other2
+            self.x = other.x + pos_diff[0]*shorten_factor
+            self.y = other.y + pos_diff[1]*shorten_factor
+        self.a = angle_to_other
+
+    def freeze(self):
+        if game.player.freezeDamage:
+            Sound.glassSound.play()
+            self.hurt(game.player.freezeDamage)
+
+    def update(self):
+        super().update()
+
+        #IDLE
+        self.follow(self.head)
+        displacement = -10
+        target = game.findPlayer(self.x + math.cos(self.a)*displacement, self.y + math.sin(self.a)*displacement, 32)
+        if target:
+            target.hurt(0.5)
+
+    def hurt(self, val=1):
+        self.head.hurt(val*0.8)
+
+    def draw(self):
+        pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
+        if self.burning>0:
+            gameDisplay.blit(self.burningImage, (int(pos[0]) - 128//2, int(pos[1]) - 128//2))
+        blitRotate(gameDisplay, self.image, (int(pos[0]), int(pos[1])), (self.imageSize//2, self.imageSize//2), self.a)
 
 class Projectile():
 
@@ -2768,7 +2987,7 @@ class Item():
     def update(self):
         self.age+=1
         if self.age>20 and (not self.shopItem or game.player.coins>=self.price):
-            if game.findPlayer(self.x,self.y, self.radius):
+            if game.findPlayer(self.x,self.y, self.radius) and game.player.hp>0:
                 if self.shopItem:
                     game.player.coins-=self.price
                     Sound.cashSound.play()
@@ -3328,21 +3547,28 @@ class CharacterSelect():
         info_text = myfont.render(info_text, False, (0, 0, 0))
         gameDisplay.blit(info_text,(class_draw_anchor[0]+256 + 40 , class_draw_anchor[1] + 20))
 
-def winAnimation():
+def winAnimation(lose = False):
     myfont_big = pygame.font.Font(pygame.font.get_default_font(), 100)
     pressed = pygame.key.get_pressed()
     da_player_that_won = game.player
-    for i in range(222):# and not pressed[pygame.K_q]:
+    
+
+    #text
+    if lose:
+        gameDisplay.fill((100,80,50))
+        text = da_player_that_won.__class__.__name__.upper() + " SLAIN!"
+    else:
+        gameDisplay.fill((120,100,50))
+        text = da_player_that_won.__class__.__name__.upper() + " WINS!"
+    textsurface = myfont_big.render(text, True, (0, 0, 0))
+    img = da_player_that_won.idleImage[0]
+
+    for i in range(122):# and not pressed[pygame.K_q]:
         pygame.event.get()
         #for event in pygame.event.get():
          #   if event.type == pygame.QUIT:
           #      State.jump_out = True
-
-        #draw
-        gameDisplay.fill((120,100,50))
-        text = da_player_that_won.__class__.__name__.upper() + " WINS!"
-        textsurface = myfont_big.render(text, True, (0, 0, 0))
-        img = da_player_that_won.idleImage[0]
+        
         gameDisplay.blit(pygame.transform.scale_by(img, 4),(430,110))
         gameDisplay.blit(textsurface,(330,600))
 

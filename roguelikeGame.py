@@ -157,7 +157,7 @@ class Floor():
         if game.depth==0:
             self.startRoom = Room([
                 [createWallF(350,350,150,50),],
-            [createF([Chest],350,300),],
+            [createF([Chest],350,300),], # ,lootTable=[StairCase2]
             [],
             ],[0,0]) # first room is empty
             self.startRoom.tutorialRoom = True
@@ -305,8 +305,8 @@ class Room():
                 e.drawUI()
 class Game():
 
-    def __init__(self):
-        self.player = random.choice(allClasses)(250,250)
+    def __init__(self, player_class):
+        self.player = player_class(250,250)#random.choice(allClasses)(250,250)
         self.allies = []
         self.room = None
         self.floor = None
@@ -318,6 +318,18 @@ class Game():
         self.player.update()
         for ally in self.allies:
             ally.update()
+
+    def gameOver(self):
+        if isinstance(self.player, Warrior):
+            Ranger.unlocked = True
+        elif isinstance(self.player, Ranger):
+            Thief.unlocked = True
+        elif isinstance(self.player, Thief):
+            Mage.unlocked = True
+        save_save_file()
+
+        Game.playing_a_run = False
+        winAnimation()
 
     def gatherAllies(self):
         for ally in self.allies:
@@ -705,6 +717,18 @@ class Player():
         gameDisplay.blit(textsurface,(200,30))
 
 class Warrior(Player):
+    unlocked = True
+    unlock_description = "This character should always be unlocked. Please contact Bror Persson 0709419442 to fix your save-file."
+    description = ("The Warriors are sword-wielding brawlers that often venture into the dungeon.\n"
+       "\n"
+       "Abilities:\n"
+       " J : A classic sword attack.\n"
+       " K : A combat roll that can dodge attacks.\n"
+       " L : Powerful spinning attack that you can charge.\n"
+       "\n"
+       "Passive ability:\n"
+       " Warriors build up rage when killing multiple enemies in quick succession,\n"
+       " allowing them to run faster and hit harder.\n")
     imageSize = 128
     idleImage = loadTexture("player/warrior/player.png", imageSize, mirror=True)
     hurtImage = loadTexture("player/warrior/hurt.png", imageSize, mirror=True)
@@ -818,8 +842,21 @@ class Warrior(Player):
             self.furyBuff+=0.5
         self.furyTime=180
 class Ranger(Player):
+    unlocked = False
+    unlock_description = "Complete the game as a Warrior to unlock."
+    description = ("The Rangers use rifles to keep the distance to their foes.\n"
+       "\n"
+       "Abilities:\n"
+       " J : Fire the rifle.\n"
+       " K : Reload the rifle.\n"
+       " L : Jump into the air and stomp to push enemies away.\n"
+       "\n"
+       "Passive ability:\n"
+       " The Rifle has three bullets.\n"
+       " Once they run out you must reload the rifle to fire again.\n")
     radius = 16
     imageSize = 128
+    blackImage = loadTexture("player/ranger/black.png", imageSize, mirror=True)
     idleImage = loadTexture("player/ranger/idle.png", imageSize, mirror=True)
     hurtImage = loadTexture("player/ranger/hurt.png", imageSize, mirror=True)
     walkImages = [loadTexture("player/ranger/walk1.png", imageSize, mirror=True), loadTexture("player/ranger/walk2.png", imageSize, mirror=True)]
@@ -931,7 +968,20 @@ class Ranger(Player):
             pygame.draw.line(gameDisplay, (255,0,0), pos,(pos[0]+self.xdir*500,pos[1]+self.ydir*500), 1)
         super().draw()
 class Thief(Player):
+    unlocked = False
+    unlock_description = "Complete the game as a Ranger to unlock."
+    description = ("The Thieves use stealth to avoid combat, and pick-pocket money from enemies without killing them.\n"
+       "\n"
+       "Abilities:\n"
+       " J : Performs a basic knife stab.\n"
+       " K : Toggles stealth mode.\n"
+       " L : Pick-pocket an enemy. This makes the enemy drop their coin on the ground.\n"
+       "\n"
+       "Passive ability:\n"
+       " While in stealth mode you cannot be seen by enemies, but they can still hit you.\n"
+       " You cannot attack while in stealth mode, but you can still pick-pocket.\n")
     imageSize = 128
+    blackImage = loadTexture("player/thief/black.png", imageSize, mirror=True)
     idleImage = loadTexture("player/thief/idle.png", imageSize, mirror=True)
     hurtImage = loadTexture("player/thief/hurt.png", imageSize, mirror=True)
     walkImages = [loadTexture("player/thief/walk1.png", imageSize, mirror=True), loadTexture("player/thief/walk2.png", imageSize, mirror=True)]
@@ -1026,7 +1076,19 @@ class Thief(Player):
                 blitRotate(gameDisplay, image, (x,y), (self.imageSize//2, self.imageSize//2), math.atan2(-self.ydir,-self.xdir))
         super().draw()
 class Mage(Player):
+    unlocked = False
+    unlock_description = "Complete the game as a Thief to unlock."
+    description = ("The Mages use powerful magic to overcome their foes.\n"
+       "\n"
+       "Abilities:\n"
+       " J : Fire a slow-moving bolt of water.\n"
+       " K : Teleport a short distance.\n"
+       " L : Waive your arms and chant to make your enemies run away in fear.\n"
+       "\n"
+       "Passive ability:\n"
+       " You can walk slowly while using your abilities, instead of completely stopping.\n")
     imageSize = 128
+    blackImage = loadTexture("player/mage/black.png", imageSize, mirror=True)
     idleImage = loadTexture("player/mage/player.png", imageSize, mirror=True)
     hurtImage = loadTexture("player/mage/hurt.png", imageSize, mirror=True)
     walkImages = [loadTexture("player/mage/walk1.png", imageSize, mirror=True), loadTexture("player/mage/walk2.png", imageSize, mirror=True)]
@@ -1163,7 +1225,31 @@ class Mage(Player):
             pygame.draw.rect(gameDisplay, (0,100,100),((display[0]-w)//2, 30, w, 30))
             pygame.draw.rect(gameDisplay, (0,200,200),((display[0]-w)//2, 30, w*(self.mana/self.maxmana), 30))
 
-allClasses = [Mage] #[Warrior,Ranger,Thief,Mage]
+def load_save_file():
+    try:
+        with open(os.path.join("roguelikeGameFiles","savefile.txt"), "r") as save_file:
+            for i in range(4):
+                line = save_file.readline()
+                if "1" in line:
+                    [Warrior,Ranger,Thief,Mage][i].unlocked = True
+                if len(unlockedClasses())>3:
+                    badItems.append(ClassChange)
+    except Exception as e:
+        print("no savefile")
+def save_save_file():
+    with open(os.path.join("roguelikeGameFiles","savefile.txt"), "w") as save_file:
+        for c in allClasses:
+            save_file.write(c.__name__ + ": " + str(int(c.unlocked)) + "\n")
+
+allClasses = [Warrior, Ranger, Thief, Mage]
+
+def unlockedClasses():
+    r = []
+    for i in allClasses:
+        if i.unlocked:
+            r.append(i)
+    return r
+
 
 class Ally():
 
@@ -2360,8 +2446,12 @@ class Boss(Enemy):
     def die(self):
         super().die()
         game.room.enemies = []
-        game.room.items.append(StairCase(self.x,self.y))
-        game.depth = 0
+        pressed = pygame.key.get_pressed()
+        if pressed[pygame.K_b]:
+            game.room.items.append(StairCase(self.x,self.y))
+            game.depth = 0
+        else:
+            game.room.items.append(StairCase2(self.x,self.y))
         print("you win")
 
 class Projectile():
@@ -2708,6 +2798,12 @@ class StairCase(Item):
         game.gatherAllies()
         for i in range(min(50, game.player.coins*game.player.piggyBank//2)):
             game.room.items.append(Coin(random.randint(100,400),random.randint(100,400)))
+class StairCase2(Item):
+    imageSize = 128
+    image = loadTexture("items/staircase.png", imageSize)
+    showItem=False
+    def pickup(self):
+        game.gameOver()
         
 class Coin(Item):
 
@@ -2884,7 +2980,7 @@ class ClassChange(Item):
 
     def pickup(self):
         oldPlayer = game.player
-        classes = allClasses.copy()
+        classes = unlockedClasses()#.copy()
         classes.remove(oldPlayer.__class__)
         game.player = random.choice(classes)(oldPlayer.x,oldPlayer.y)
         game.player.coins = oldPlayer.coins
@@ -2953,8 +3049,8 @@ class ProjectileEnlarger(Item):
             projCls.changeSize(game.player.projectileSize/(game.player.projectileSize-1))
 
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
-goodItems=[PiggyBank,FireStar,ShockLink,FireSword,MagicWand,ColdCore,Crystal,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet,ProjectileEnlarger]
-badItems=[Fruit,Stick,Fan,Bouncer,IceShield,Mosscrystal,Magnet,ClassChange,Spirality,FireRope,Library]
+goodItems=[PiggyBank,Bouncer,ShockLink,FireSword,MagicWand,ColdCore,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet,ProjectileEnlarger]
+badItems=[Fruit,Stick,FireStar,Fan,IceShield,Mosscrystal,Crystal,Magnet,Spirality,FireRope,Library]
 allItems=goodItems+badItems
 roomPresets=[
     [[
@@ -3187,17 +3283,100 @@ roomPresets=[
 
 ]
 
-game = Game()
-game.enterFloor(Floor(roomPresets))
+class CharacterSelect():
 
+    def __init__(self):
+        load_save_file()
+        self.cursor = 0
+
+    def update(self):
+        pass
+
+    def draw(self):
+        gameDisplay.fill((100,80,50))
+        allClasses_draw_anchor = (200,600)
+        for i in range(len(allClasses)):
+            da_class = (allClasses)[i]
+            if i == self.cursor:
+                pygame.draw.rect(gameDisplay, (120,100,50), (allClasses_draw_anchor[0]+i*120, allClasses_draw_anchor[1],128,128))
+            if da_class.unlocked:
+                img = da_class.idleImage[0]
+            else:
+                img = da_class.blackImage[0]
+            gameDisplay.blit(img, (allClasses_draw_anchor[0]+i*120, allClasses_draw_anchor[1]))
+
+        class_draw_anchor = (200,200)
+        selected_class = allClasses[self.cursor]
+        pygame.draw.rect(gameDisplay, (120,100,50), (*class_draw_anchor,256,256))
+        if selected_class.unlocked:
+            img = selected_class.idleImage[1]
+        else:
+            img = selected_class.blackImage[1]
+        gameDisplay.blit(pygame.transform.scale_by(img, 2), class_draw_anchor)
+
+
+        myfont_big = pygame.font.Font(pygame.font.get_default_font(), 50)
+        if selected_class.unlocked:
+            classname_text = selected_class.__name__
+            info_text = selected_class.description
+        else:
+            classname_text = "LOCKED"
+            info_text = selected_class.unlock_description
+
+        classname_text = myfont_big.render(classname_text, False, (0, 0, 0))
+        gameDisplay.blit(classname_text,(class_draw_anchor[0] + 20, class_draw_anchor[1]+256 + 40))
+        info_text = myfont.render(info_text, False, (0, 0, 0))
+        gameDisplay.blit(info_text,(class_draw_anchor[0]+256 + 40 , class_draw_anchor[1] + 20))
+
+def winAnimation():
+    myfont_big = pygame.font.Font(pygame.font.get_default_font(), 100)
+    pressed = pygame.key.get_pressed()
+    da_player_that_won = game.player
+    for i in range(222):# and not pressed[pygame.K_q]:
+        pygame.event.get()
+        #for event in pygame.event.get():
+         #   if event.type == pygame.QUIT:
+          #      State.jump_out = True
+
+        #draw
+        gameDisplay.fill((120,100,50))
+        text = da_player_that_won.__class__.__name__.upper() + " WINS!"
+        textsurface = myfont_big.render(text, True, (0, 0, 0))
+        img = da_player_that_won.idleImage[0]
+        gameDisplay.blit(pygame.transform.scale_by(img, 4),(430,110))
+        gameDisplay.blit(textsurface,(330,600))
+
+        pygame.display.update()
+        clock.tick(60)
+
+characterSelect = CharacterSelect()
+
+Game.playing_a_run = False
 jump_out = False
 while jump_out == False:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             jump_out = True
+        if event.type == pygame.KEYDOWN and not Game.playing_a_run:
+            if event.key in [pygame.K_RIGHT, pygame.K_d]:
+                characterSelect.cursor = min( characterSelect.cursor +1 , len(allClasses)-1)
+            if event.key in [pygame.K_LEFT, pygame.K_a]:
+                characterSelect.cursor = max( characterSelect.cursor -1 , 0)
+            if event.key in [pygame.K_SPACE, pygame.K_RETURN]:
+                if allClasses[characterSelect.cursor].unlocked:
+                    Game.playing_a_run = True
+                    game = Game(allClasses[characterSelect.cursor])
+                    game.enterFloor(Floor(roomPresets))
+            if event.key in [pygame.K_q, pygame.K_ESCAPE]:
+                jump_out = True
 
-    game.update()
-    game.draw()
+
+    if Game.playing_a_run:
+        game.update()
+        game.draw()
+    else:
+        characterSelect.update()
+        characterSelect.draw()
 
     pygame.display.flip()
     clock.tick(60)

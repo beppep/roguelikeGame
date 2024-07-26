@@ -1,0 +1,4 @@
+Warrior: 1
+Ranger: 0
+Thief: 0
+Mage: 0

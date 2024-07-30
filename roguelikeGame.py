@@ -733,16 +733,17 @@ class Player():
 class Warrior(Player):
     unlocked = True
     unlock_description = "This character should always be unlocked. Please contact Bror Persson 0709419442 to fix your save-file."
-    description = ("The Warriors are sword-wielding brawlers that often venture into the dungeon.\n"
-       "\n"
-       "Abilities:\n"
-       " J : A classic sword attack.\n"
-       " K : A combat roll that can dodge attacks.\n"
-       " L : Powerful spinning attack that you can charge.\n"
-       "\n"
-       "Passive ability:\n"
-       " Warriors build up rage when killing multiple enemies in quick succession,\n"
-       " allowing them to run faster and hit harder.\n")
+    description = ["The Warriors are sword-wielding brawlers that often venture into the dungeon.",
+        "",
+        "Abilities:",
+        " J : A classic sword attack.",
+        " K : A combat roll that can dodge attacks.",
+        " L : Powerful spinning attack that you can charge.",
+        "",
+        "Passive ability:",
+        " Warriors build up rage when killing multiple enemies in quick succession,",
+        " allowing them to run faster and hit harder.",
+    ]
     imageSize = 128
     idleImage = loadTexture("player/warrior/player.png", imageSize, mirror=True)
     hurtImage = loadTexture("player/warrior/hurt.png", imageSize, mirror=True)
@@ -860,16 +861,17 @@ class Warrior(Player):
 class Ranger(Player):
     unlocked = False
     unlock_description = "Complete the game as a Warrior to unlock."
-    description = ("The Rangers use rifles to keep the distance to their foes.\n"
-       "\n"
-       "Abilities:\n"
-       " J : Fire the rifle.\n"
-       " K : Reload the rifle.\n"
-       " L : Jump into the air and stomp to push enemies away.\n"
-       "\n"
-       "Passive ability:\n"
-       " The Rifle has three bullets.\n"
-       " Once they run out you must reload the rifle to fire again.\n")
+    description = ["The Rangers use rifles to keep the distance to their foes.",
+        "",
+        "Abilities:",
+        " J : Fire the rifle.",
+        " K : Reload the rifle.",
+        " L : Jump into the air and stomp to push enemies away.",
+        "",
+        "Passive ability:",
+        " The Rifle has three bullets.",
+        " Once they run out you must reload the rifle to fire again.",
+    ]
     radius = 16
     imageSize = 128
     blackImage = loadTexture("player/ranger/black.png", imageSize, mirror=True)
@@ -986,16 +988,17 @@ class Ranger(Player):
 class Thief(Player):
     unlocked = False
     unlock_description = "Complete the game as a Ranger to unlock."
-    description = ("The Thieves use stealth to avoid combat, and pick-pocket money from enemies without killing them.\n"
-       "\n"
-       "Abilities:\n"
-       " J : Performs a basic knife stab.\n"
-       " K : Toggles stealth mode.\n"
-       " L : Pick-pocket an enemy. This makes the enemy drop their coin on the ground.\n"
-       "\n"
-       "Passive ability:\n"
-       " While in stealth mode you cannot be seen by enemies, but they can still hit you.\n"
-       " You cannot attack while in stealth mode, but you can still pick-pocket.\n")
+    description = ["The Thieves use stealth to avoid combat, and pick-pocket money from enemies without killing them.",
+        "",
+        "Abilities:",
+        " J : Performs a basic knife stab.",
+        " K : Toggles stealth mode.",
+        " L : Pick-pocket an enemy. This makes the enemy drop their coin on the ground.",
+        "",
+        "Passive ability:",
+        " While in stealth mode you cannot be seen by enemies, but they can still hit you.",
+        " You cannot attack while in stealth mode, but you can still pick-pocket.",
+    ]
     imageSize = 128
     blackImage = loadTexture("player/thief/black.png", imageSize, mirror=True)
     idleImage = loadTexture("player/thief/idle.png", imageSize, mirror=True)
@@ -1095,15 +1098,16 @@ class Thief(Player):
 class Mage(Player):
     unlocked = False
     unlock_description = "Complete the game as a Thief to unlock."
-    description = ("The Mages use powerful magic to overcome their foes.\n"
-       "\n"
-       "Abilities:\n"
-       " J : Fire a slow-moving bolt of water.\n"
-       " K : Teleport a short distance.\n"
-       " L : Waive your arms and chant to make your enemies run away in fear.\n"
-       "\n"
-       "Passive ability:\n"
-       " You can walk slowly while using your abilities, instead of completely stopping.\n")
+    description = ["The Mages use powerful magic to overcome their foes.",
+        "",
+        "Abilities:",
+        " J : Fire a slow-moving bolt of water.",
+        " K : Teleport a short distance.",
+        " L : Waive your arms and chant to make your enemies run away in fear.",
+        "",
+        "Passive ability:",
+        " You can walk slowly while using your abilities, instead of completely stopping.",
+    ]
     imageSize = 128
     blackImage = loadTexture("player/mage/black.png", imageSize, mirror=True)
     idleImage = loadTexture("player/mage/player.png", imageSize, mirror=True)
@@ -3555,12 +3559,13 @@ class CharacterSelect():
             info_text = selected_class.description
         else:
             classname_text = "LOCKED"
-            info_text = selected_class.unlock_description
+            info_text = [selected_class.unlock_description] # LOL
 
-        classname_text = myfont_big.render(classname_text, False, (0, 0, 0))
-        gameDisplay.blit(classname_text,(class_draw_anchor[0] + 20, class_draw_anchor[1]+256 + 40))
-        info_text = myfont.render(info_text, False, (0, 0, 0))
-        gameDisplay.blit(info_text,(class_draw_anchor[0]+256 + 40 , class_draw_anchor[1] + 20))
+        classname_text_surf = myfont_big.render(classname_text, False, (0, 0, 0))
+        gameDisplay.blit(classname_text_surf,(class_draw_anchor[0] + 20, class_draw_anchor[1]+256 + 40))
+        for row in range(len(info_text)):
+            info_text_surf = myfont.render(info_text[row], False, (0, 0, 0))
+            gameDisplay.blit(info_text_surf,(class_draw_anchor[0]+256 + 40 , class_draw_anchor[1] + 20 + 22*row))
 
 def winAnimation(lose = False):
     myfont_big = pygame.font.Font(pygame.font.get_default_font(), 100)

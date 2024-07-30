@@ -33,7 +33,7 @@ pygame.init()
 info = pygame.display.Info() # You have to call this before pygame.display.set_mode()
 display = (info.current_w,info.current_h)
 gameDisplay = pygame.display.set_mode(display,)# pygame.FULLSCREEN)
-gameDisplay.blit(pygame.image.load(os.path.join(filepath, "textures", "loading.png")),(0,0))
+gameDisplay.blit(pygame.transform.scale(pygame.image.load(os.path.join(filepath, "textures", "loading.png")),display),(0,0))
 pygame.display.update()
 pygame.display.set_caption("Roguelike Game")
 pygame.display.set_icon(pygame.image.load(os.path.join(filepath, "textures", "player", "warrior", "player.png")))
@@ -57,6 +57,10 @@ class Sound():
     reloadSound.set_volume(volume*0.2)
     shotSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "shot.wav"))
     shotSound.set_volume(volume*0.2)
+    coinSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "coin2.wav"))
+    coinSound.set_volume(volume*0.5)
+    pickpocketSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "coin.wav"))
+    pickpocketSound.set_volume(volume*0.5)
     cashSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "cash.wav"))
     cashSound.set_volume(volume*0.2)
     glassSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "glass.wav"))
@@ -157,7 +161,7 @@ class Floor():
         if game.depth==0:
             self.startRoom = Room([
                 [createWallF(350,350,150,50),],
-            [createF([Chest],350,300),], # ,lootTable=[StairCase2]
+            [createF([Chest],350,300),], # ,lootTable=[ProjectileEnlarger]
             [],
             ],[0,0]) # first room is empty
             self.startRoom.tutorialRoom = True
@@ -332,7 +336,7 @@ class Game():
 
         Game.playing_a_run = False
         for projCls in [Sapphire,Ruby,Emerald,Bullet,FireBullet,Orb,FireOrb]:
-            projCls.changeSize(1/(self.player.projectileSize))
+            projCls.changeSize(1)
         winAnimation(lose = lose)
 
     def gatherAllies(self):
@@ -744,7 +748,7 @@ class Warrior(Player):
     hurtImage = loadTexture("player/warrior/hurt.png", imageSize, mirror=True)
     walkImages = [loadTexture("player/warrior/walk1.png", imageSize, mirror=True), loadTexture("player/warrior/walk2.png", imageSize, mirror=True)]
     attackImages = [loadTexture("player/warrior/strike1.png", imageSize, mirror=True), loadTexture("player/warrior/strike2.png", imageSize, mirror=True)]
-    rollImages = [loadTexture("player/warrior/roll1.png", imageSize, mirror=True), loadTexture("player/warrior/roll2.png", imageSize, mirror=True)]
+    rollImages = [loadTexture("player/warrior/roll1.png", imageSize, mirror=True), loadTexture("player/warrior/roll2.png", imageSize, mirror=True),loadTexture("player/warrior/roll3.png", imageSize, mirror=True)]
 
     swipeImage = loadTexture("player/warrior/swipe.png", imageSize)
     fireSwipeImage = loadTexture("player/warrior/fireswipe.png", imageSize)
@@ -772,7 +776,7 @@ class Warrior(Player):
             self.stateTimer+=1
             if self.stateTimer<20:
                 self.invincibility=1
-                self.image = random.choice(self.rollImages)
+                self.image = self.rollImages[self.stateTimer//8]
                 self.x+=self.xdir*self.rollSpeed#*self.movementSpeed
                 self.y+=self.ydir*self.rollSpeed#*self.movementSpeed
                 # fanRoll
@@ -786,11 +790,13 @@ class Warrior(Player):
                         target.xv=-self.xdir*self.fanRoll
                         target.yv=-self.ydir*self.fanRoll
 
-            elif self.stateTimer==20:
-                self.image = self.rollImages[0]
+            elif self.stateTimer<24:
+                self.image = self.rollImages[2]
                 self.fakeX = self.x
                 self.fakeY = self.y
-            elif self.stateTimer>=30:
+            elif self.stateTimer<30:
+                self.image = self.walkImages[1]
+            else:
                 self.state = 0
 
         # ???
@@ -1063,6 +1069,7 @@ class Thief(Player):
                     if target.coins:
                         target.coins-=1
                         game.room.items.append(Coin(target.x+random.randint(-8,8),target.y+random.randint(-8,8),))
+                        Sound.pickpocketSound.play()
             elif self.stateTimer<11:
                 self.image = self.stealImages[1]
             elif self.stateTimer<15:
@@ -1527,6 +1534,7 @@ class Chest(Enemy):
         super().__init__(x,y)
         self.image = self.idleImage
         self.hp = 1
+        self.coins = 0
         self.lootTable = allItems
         self.harmless = True
     #def fire(*a):
@@ -2188,7 +2196,7 @@ class Mercenary(Enemy):
         if self.state == 0:
             self.image = random.choice([self.idleImage]+self.walkImages)
             self.basicMove()
-            if game.player.state==1:
+            if game.player.state==1 and random.random()<0.05:
                 self.state = 2
                 self.stateTimer = 0
             if game.findPlayer(self.x, self.y, 32, fool=True):
@@ -2389,6 +2397,7 @@ class Boss(Enemy):
         self.movementSpeed = 0.2
         self.coins = 10
         self.arms = 8
+        self.firstMoveSpores = 1
 
     def freeze(self):
         if game.player.freezeDamage:
@@ -2402,7 +2411,8 @@ class Boss(Enemy):
         if self.state == 0:
             self.image = self.idleImage
             self.basicMove()
-            if random.random()<0.02:
+            if random.random()<0.02 or self.firstMoveSpores>0:
+                self.firstMoveSpores -= 1
                 self.state = 2
                 self.stateTimer = 0
             if random.random()<0.06:
@@ -2415,12 +2425,13 @@ class Boss(Enemy):
         #SPORES
         if self.state == 2:
             self.stateTimer+=1
-            if self.stateTimer==10: #summon spores
+            if self.stateTimer in [10,30,50]: #summon spores
                 self.image = self.screamImage
-                for i in range(4):
-                    spore = Spore(self.x+directionHash[i][0]*64,self.y+directionHash[i][1]*64,*directionHash[i])
-                    spore.createOwner=True
-                    game.room.projectiles.append(spore)
+                dx = (game.player.fakeX - self.x + random.randint(-60,60))*0.8/120
+                dy = (game.player.fakeY - self.y + random.randint(-60,60))*0.8/120
+                spore = Spore(self.x,self.y, dx, dy)
+                spore.createOwner=True
+                game.room.projectiles.append(spore)
             if self.stateTimer==60:
                 self.image = self.idleImage
             if self.stateTimer>=200:
@@ -2469,7 +2480,7 @@ class Boss(Enemy):
 
 class Boss2(Enemy):
     
-    radius = 24
+    radius = 48
     imageSize = 128
     idleImage = loadTexture("enemies/lord wurm/head.png", imageSize)
     screamImage = loadTexture("enemies/lord wurm/bite1.png", imageSize)
@@ -2621,7 +2632,7 @@ class Boss2(Enemy):
         print("you win")
 class Boss2_tail(Enemy):
     
-    radius = 24
+    radius = 32
     imageSize = 128
     idleImage = loadTexture("enemies/lord wurm/tail.png", imageSize)
 
@@ -2662,7 +2673,7 @@ class Boss2_tail(Enemy):
         displacement = -10
         target = game.findPlayer(self.x + math.cos(self.a)*displacement, self.y + math.sin(self.a)*displacement, 32)
         if target:
-            target.hurt(0.5)
+            target.hurt(0.4)
 
     def hurt(self, val=1):
         self.head.hurt(val*0.8)
@@ -2689,9 +2700,12 @@ class Projectile():
             self.bounces = game.player.projBounces
     @classmethod
     def changeSize(cls,multiplier):
-        cls.radius = cls.radius*multiplier
-        cls.imageSize = int(cls.imageSize*multiplier)
-        cls.image = loadTexture(cls.imagePath, cls.imageSize)
+        if not hasattr(cls, 'original_radius'):
+            cls.original_radius = cls.radius
+            cls.original_imageSize = cls.imageSize
+        cls.radius = int(cls.original_radius*multiplier)
+        cls.imageSize = int(cls.original_imageSize*multiplier)
+        cls.image = loadTexture(cls.imagePath, cls.original_imageSize*multiplier)
         #print("enlarged",cls, cls.imageSize*multiplier)
 
     def update(self):
@@ -2714,7 +2728,7 @@ class Projectile():
             self.xv = math.cos(self.a)*hyp
             self.yv = math.sin(self.a)*hyp
 
-        if game.player.magicWand:# and not self.evil:
+        if game.player.magicWand and not self.evil:
             self.xv += game.player.magicWand * game.player.dx * 0.05
             self.yv += game.player.magicWand * game.player.dy * 0.05
             self.xv *= 0.99
@@ -2743,7 +2757,7 @@ class Projectile():
 
     def draw(self):
         pos=(int((display[0]-game.room.roomSize[0])/2+self.x),int((display[1]-game.room.roomSize[1])/2+self.y))
-        if game.player.magicWand:
+        if game.player.magicWand and not self.evil:
             gameDisplay.blit(self.magicglowImage, (int(pos[0]) - 64//2, int(pos[1]) - 64//2))
         if self.drawAngled:
             blitRotate(gameDisplay, self.image, (int(pos[0]),int(pos[1])), (self.imageSize//2, self.imageSize//2), math.atan2(-self.yv,-self.xv))
@@ -3031,6 +3045,7 @@ class Coin(Item):
     showItem = False
     def pickup(self):
         game.player.coins+=1
+        Sound.coinSound.play()
         if game.player.mosscrystal:
             for i in range(game.player.mosscrystal):
                 a = random.random()*6.28
@@ -3208,7 +3223,7 @@ class ClassChange(Item):
         for i in range(len(oldPlayer.shownItems)):
             clss=list(oldPlayer.shownItems.keys())[i]
             for j in range(oldPlayer.shownItems[clss]):
-                if not clss == ClassChange:
+                if not (clss == ClassChange or clss == ProjectileEnlarger):
                     clss(game.player.x,game.player.y).pickup()
                 if(clss.showItem):
                     if (clss in game.player.shownItems):
@@ -3265,11 +3280,11 @@ class ProjectileEnlarger(Item):
     def pickup(self):
         game.player.projectileSize += 1
         for projCls in [Sapphire,Ruby,Emerald,Bullet,FireBullet,Orb,FireOrb]:
-            projCls.changeSize(game.player.projectileSize/(game.player.projectileSize-1))
+            projCls.changeSize(game.player.projectileSize)
 
 directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
 goodItems=[PiggyBank,Bouncer,ShockLink,FireSword,MagicWand,ColdCore,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet,ProjectileEnlarger]
-badItems=[Fruit,Stick,FireStar,Fan,IceShield,Mosscrystal,Crystal,Magnet,Spirality,FireRope,Library]
+badItems=[Fruit,Stick,FireStar,Fan,IceShield,Mosscrystal,Crystal,Magnet,FireRope,Library]
 allItems=goodItems+badItems
 roomPresets=[
     [[
@@ -3278,7 +3293,7 @@ roomPresets=[
     createWallF(100,400,160,180, occurance=0.3),
     createWallF(400,400,190,190, occurance=0.3),
     ],[
-    createF([Chest],100,100, lootTable=[None,Saw,Svamp,Tnt], occurance=0.5),
+    createF([Chest],100,100, lootTable=[Spirality,Saw,Svamp,Tnt], occurance=0.5),
     createF([Animus,Pufferfish,Skull,Saw,Svamp],250,250),
     createF([Animus,Pufferfish,Skull,Saw,Sledger],250,250, depth=3),
     createF([Animus,Pufferfish,Robot,Skull,Saw,Schmitt],250,250, depth=5),
@@ -3410,7 +3425,7 @@ roomPresets=[
     ],[
     createF([Heart],350,250, occurance=0.5),
     createF([Coin],350,350, occurance=0.6),
-    createF([Coin],150,150, occurance=0.6),
+    createF([Coin, Spirality],150,150, occurance=0.6),
     ],], # Minotaur
 
     [[

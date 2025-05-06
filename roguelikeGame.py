@@ -41,7 +41,7 @@ pygame.font.init()
 #myfont = pygame.font.SysFont('Calibri', 20) #for pyinstaller
 myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
-boost = 0
+boost = 5
 
 class Sound():
     volume = 1
@@ -69,8 +69,8 @@ class Sound():
     horrorSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "panic.wav"))
     horrorSound.set_volume(volume*0.5)
     
-    pygame.mixer.music.load(os.path.join(SOUND_PATH, "Age of War.wav")) #must be wav 16bit and stuff?
-    pygame.mixer.music.set_volume(volume*0.05)
+    pygame.mixer.music.load(os.path.join(SOUND_PATH, "junglemusic.wav")) #must be wav 16bit and stuff?
+    pygame.mixer.music.set_volume(volume*0.25)
     time.sleep(0.1)
     pygame.mixer.music.play(-1)
 
@@ -2403,6 +2403,10 @@ class Boss(Enemy):
         self.arms = 8
         self.firstMoveSpores = 1
 
+        pygame.mixer.music.stop()  # Stop the current song
+        pygame.mixer.music.load(os.path.join(SOUND_PATH, "bosstheme.wav"))  # Load the new song
+        pygame.mixer.music.play(-1)  # Play the new song in a loop
+
     def freeze(self):
         if game.player.freezeDamage:
             Sound.glassSound.play()
@@ -2503,6 +2507,11 @@ class Boss2(Enemy):
         self.xv = 0
         self.yv = 1
         game.room.enemies.append(self.tail)
+
+
+        pygame.mixer.music.stop()  # Stop the current song
+        pygame.mixer.music.load(os.path.join(SOUND_PATH, "bosstheme.wav"))  # Load the new song
+        pygame.mixer.music.play(-1)  # Play the new song in a loop
 
     def freeze(self):
         if game.player.freezeDamage:

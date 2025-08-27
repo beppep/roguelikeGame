@@ -30,7 +30,6 @@ def roguelikeGameMain():
     """
 
     clock = pygame.time.Clock()
-    filepath="roguelikeGameFiles"
     SOUND_PATH = os.path.join(filepath, "sounds")
     pygame.init()
     info = pygame.display.Info() # You have to call this before pygame.display.set_mode()
@@ -44,36 +43,35 @@ def roguelikeGameMain():
     #myfont = pygame.font.SysFont('Calibri', 20) #for pyinstaller
     myfont = pygame.font.Font(pygame.font.get_default_font(), 20)
 
-    boost = 5
+    boost = 0
 
     class Sound():
-        volume = 1
         SOUND_PATH=os.path.join(filepath, "sounds")
         pygame.font.init() # you have to call this at the start, 
                                # if you want to use this module.
         pygame.mixer.init(buffer=256) # important to change?
         hitSounds=[]
         hitSounds.append(pygame.mixer.Sound(os.path.join(SOUND_PATH, "hit1.wav")))
-        hitSounds[0].set_volume(volume*0.4)
+        hitSounds[0].set_volume(0.4)
 
         reloadSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "reload.wav"))
-        reloadSound.set_volume(volume*0.2)
+        reloadSound.set_volume(0.2)
         shotSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "shot.wav"))
-        shotSound.set_volume(volume*0.2)
+        shotSound.set_volume(0.2)
         coinSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "coin2.wav"))
-        coinSound.set_volume(volume*0.5)
+        coinSound.set_volume(0.5)
         pickpocketSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "coin.wav"))
-        pickpocketSound.set_volume(volume*0.5)
+        pickpocketSound.set_volume(0.5)
         cashSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "cash.wav"))
-        cashSound.set_volume(volume*0.2)
+        cashSound.set_volume(0.2)
         glassSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "glass.wav"))
-        glassSound.set_volume(volume*0.2)
+        glassSound.set_volume(0.2)
         playedHorrorSound = False
         horrorSound = pygame.mixer.Sound(os.path.join(SOUND_PATH, "panic.wav"))
-        horrorSound.set_volume(volume*0.5)
+        horrorSound.set_volume(0.5)
         
         pygame.mixer.music.load(os.path.join(SOUND_PATH, "junglemusic.wav")) #must be wav 16bit and stuff?
-        pygame.mixer.music.set_volume(volume*0.25)
+        pygame.mixer.music.set_volume(0.1)
         time.sleep(0.01)
         pygame.mixer.music.play(-1)
 
@@ -164,7 +162,7 @@ def roguelikeGameMain():
             if game.depth==0:
                 self.startRoom = Room([
                     [createWallF(350,350,150,50),],
-                [createF([Chest],350,300),], # ,lootTable=[ProjectileEnlarger]
+                [createF([Chest],350,300,lootTable=[Library]),],
                 [],
                 ],[0,0]) # first room is empty
                 self.startRoom.tutorialRoom = True
@@ -2410,6 +2408,7 @@ def roguelikeGameMain():
 
             pygame.mixer.music.stop()  # Stop the current song
             pygame.mixer.music.load(os.path.join(SOUND_PATH, "bosstheme.wav"))  # Load the new song
+            pygame.mixer.music.set_volume(0.2)
             pygame.mixer.music.play(-1)  # Play the new song in a loop
 
         def freeze(self):
@@ -2511,6 +2510,7 @@ def roguelikeGameMain():
             
             pygame.mixer.music.stop()  # Stop the current song
             pygame.mixer.music.load(os.path.join(SOUND_PATH, "bosstheme.wav"))  # Load the new song
+            pygame.mixer.music.set_volume(0.2)
             pygame.mixer.music.play(-1)  # Play the new song in a loop
 
         def freeze(self):
@@ -3056,6 +3056,7 @@ def roguelikeGameMain():
                     game.room.items.append(Coin(random.randint(100,400),random.randint(100,400)))
                 pygame.mixer.music.stop()  # Stop the current song
                 pygame.mixer.music.load(os.path.join(SOUND_PATH, "junglemusic.wav"))  # Load the new song
+                pygame.mixer.music.set_volume(0.1)
                 pygame.mixer.music.play(-1)  # Play the new song in a loop
             else:
                 game.gameOver()
@@ -3082,7 +3083,7 @@ def roguelikeGameMain():
                 self.x += (target.x-self.x)/hyp*game.player.magnet
                 self.y += (target.y-self.y)/hyp*game.player.magnet
     class Fruit(Item):
-        libraryString = "Hasty Snack"
+        libraryString = "Fruit of Speed"
         price=8
         imageSize = 128
         image = loadTexture("items/fruit.png", imageSize)
@@ -3101,7 +3102,7 @@ def roguelikeGameMain():
                 game.player.maxAmmo+=1
                 game.player.ammo+=1
     class Fan(Item):
-        libraryString = "Windy Fan Thingy"
+        libraryString = "Windy Fan"
         price=6
         imageSize = 128
         image = loadTexture("items/fan.png", imageSize)
@@ -3306,7 +3307,7 @@ def roguelikeGameMain():
 
     directionHash={0:[0,-1],1:[1,0],2:[0,1],3:[-1,0]}
     goodItems=[Stick,PiggyBank,Bouncer,ShockLink,FireSword,MagicWand,ColdCore,Icecrystal,WaterFace,VampireBite,JesterHat,Carpet]
-    badItems=[Fruit,FireStar,Fan,IceShield,Mosscrystal,Crystal,Magnet,FireRope,Library,ProjectileEnlarger]
+    badItems=[Fruit,FireStar,Fan,IceShield,Mosscrystal,Crystal,Magnet,FireRope,ProjectileEnlarger]
     allItems=goodItems+badItems
     roomPresets=[
         [[
@@ -3615,6 +3616,7 @@ def roguelikeGameMain():
 
         pygame.mixer.music.stop()  # Stop the current song
         pygame.mixer.music.load(os.path.join(SOUND_PATH, "junglemusic.wav"))  # Load the new song
+        pygame.mixer.music.set_volume(0.1)
         pygame.mixer.music.play(-1)  # Play the new song in a loop
 
     characterSelect = CharacterSelect()
@@ -3652,9 +3654,15 @@ def roguelikeGameMain():
     return
 
 if __name__ == "__main__":
+    filepath=os.path.join("roguelikeGameFiles")
     roguelikeGameMain()
     pygame.quit() #in name==main__ becuase of  brors pygame launcher
     #quit() #remove for pyinstaller i think?
+else:
+    filepath=os.path.join("launcherFiles","roguelikeGameFiles")
+    import sys
+    if hasattr(sys, '_MEIPASS'):
+        filepath = os.path.join(sys._MEIPASS, filepath)
 
 #ddddddddd         ddddddddd            aa  bssssss  
 #aasssddddddSSSSSSDDDDDddddddddddddADDDDDDDDDDDDD
